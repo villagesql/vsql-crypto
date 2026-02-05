@@ -1,0 +1,137 @@
+# Test error handling for cryptographic functions
+
+# Setup: Copy VEB to veb_dir if VSQL_CRYPTO_VEB is set, then install extension
+--let $veb_dest = `SELECT CONCAT(@@veb_dir, '/vsql_crypto.veb')`
+if ($VSQL_CRYPTO_VEB) {
+  --error 0,1
+  --remove_file $veb_dest
+  --copy_file $VSQL_CRYPTO_VEB $veb_dest
+}
+INSTALL EXTENSION vsql_crypto;
+
+--echo # Test digest with invalid algorithm (returns NULL)
+SELECT vsql_crypto.digest('test', 'invalid-algo') IS NULL;
+
+--echo # Test digest with NULL data
+SELECT vsql_crypto.digest(NULL, 'sha256') IS NULL;
+
+--echo # Test digest with NULL algorithm
+SELECT vsql_crypto.digest('test', NULL) IS NULL;
+
+--echo # Test digest with empty algorithm (returns NULL)
+SELECT vsql_crypto.digest('test', '') IS NULL;
+
+--echo # Test hmac with invalid algorithm (returns NULL)
+SELECT vsql_crypto.hmac('data', 'key', 'invalid-algo') IS NULL;
+
+--echo # Test hmac with NULL data
+SELECT vsql_crypto.hmac(NULL, 'key', 'sha256') IS NULL;
+
+--echo # Test hmac with NULL key
+SELECT vsql_crypto.hmac('data', NULL, 'sha256') IS NULL;
+
+--echo # Test hmac with NULL algorithm
+SELECT vsql_crypto.hmac('data', 'key', NULL) IS NULL;
+
+--echo # Test hmac with empty key (should work - HMAC allows empty keys)
+SELECT LENGTH(vsql_crypto.hmac('data', '', 'sha256')) > 0;
+
+--echo # Test encrypt with invalid algorithm (returns NULL)
+SELECT vsql_crypto.encrypt('data', 'key', 'invalid-algo') IS NULL;
+
+--echo # Test encrypt with NULL data
+SELECT vsql_crypto.encrypt(NULL, 'key', 'aes') IS NULL;
+
+--echo # Test encrypt with NULL key
+SELECT vsql_crypto.encrypt('data', NULL, 'aes') IS NULL;
+
+--echo # Test encrypt with NULL algorithm
+SELECT vsql_crypto.encrypt('data', 'key', NULL) IS NULL;
+
+--echo # Test encrypt with empty key (returns NULL for security)
+SELECT vsql_crypto.encrypt('data', '', 'aes') IS NULL;
+
+--echo # Test decrypt with invalid algorithm (returns NULL)
+SELECT vsql_crypto.decrypt('data', 'key', 'invalid-algo') IS NULL;
+
+--echo # Test decrypt with NULL data
+SELECT vsql_crypto.decrypt(NULL, 'key', 'aes') IS NULL;
+
+--echo # Test decrypt with NULL key
+SELECT vsql_crypto.decrypt('data', NULL, 'aes') IS NULL;
+
+--echo # Test decrypt with NULL algorithm
+SELECT vsql_crypto.decrypt('data', 'key', NULL) IS NULL;
+
+--echo # Test decrypt with wrong key
+SET @data = 'Hello, World!';
+SET @key1 = 'correct-key-16!!';
+SET @key2 = 'wrong-key-16!!!!';
+SET @enc = vsql_crypto.encrypt(@data, @key1, 'aes');
+SELECT vsql_crypto.decrypt(@enc, @key2, 'aes') = @data;
+
+--echo # Test decrypt with corrupted data
+SELECT vsql_crypto.decrypt('corrupted-data', 'key', 'aes') IS NULL;
+
+--echo # Test decrypt with too short data
+SELECT vsql_crypto.decrypt('abc', 'key', 'aes') IS NULL;
+
+--echo # Test gen_random_bytes with zero
+SELECT vsql_crypto.gen_random_bytes(0) IS NULL;
+
+--echo # Test gen_random_bytes with negative number
+SELECT vsql_crypto.gen_random_bytes(-1) IS NULL;
+
+--echo # Test gen_random_bytes with very large number (should fail or return NULL)
+SELECT vsql_crypto.gen_random_bytes(1073741824) IS NULL;
+
+--echo # Test gen_random_bytes with NULL
+SELECT vsql_crypto.gen_random_bytes(NULL) IS NULL;
+
+--echo # Test decrypt of data encrypted with different algorithm
+SET @data = 'test data';
+SET @key = 'sixteen-byte-key';
+SET @enc_aes = vsql_crypto.encrypt(@data, @key, 'aes');
+SELECT vsql_crypto.decrypt(@enc_aes, @key, 'aes-256') = @data;
+
+--echo # Test AES-256 requires longer key
+SET @short_key = 'short';
+SET @data = 'test';
+SET @enc = vsql_crypto.encrypt(@data, @short_key, 'aes-256');
+SELECT @enc IS NOT NULL;
+
+--echo # Test case sensitivity of algorithm names
+SELECT HEX(vsql_crypto.digest('test', 'SHA256')) = HEX(vsql_crypto.digest('test', 'sha256'));
+
+--echo # Test mixed case algorithm names
+SELECT HEX(vsql_crypto.digest('test', 'Sha256'));
+
+--echo # Test gen_salt with invalid algorithm
+SELECT vsql_crypto.gen_salt('invalid-algo', 17) IS NULL;
+
+--echo # Test gen_salt with NULL
+SELECT vsql_crypto.gen_salt(NULL, 100) IS NULL;
+
+--echo # Test gen_salt with invalid iteration count (too small)
+SELECT vsql_crypto.gen_salt('pbkdf2-sha256', 0) IS NULL;
+
+--echo # Test gen_salt with invalid iteration count (too large)
+SELECT vsql_crypto.gen_salt('pbkdf2-sha256', 20000000) IS NULL;
+
+--echo # Test crypt with NULL password
+SELECT vsql_crypto.crypt(NULL, '$pbkdf2-sha256$10000$abc') IS NULL;
+
+--echo # Test crypt with NULL salt
+SELECT vsql_crypto.crypt('password', NULL) IS NULL;
+
+--echo # Test crypt with invalid salt format
+SELECT vsql_crypto.crypt('password', 'invalid-salt') IS NULL;
+
+--echo # Test crypt with malformed salt (missing parts)
+SELECT vsql_crypto.crypt('password', '$pbkdf2-sha256$10000') IS NULL;
+
+--echo # Test crypt with invalid algorithm in salt
+SELECT vsql_crypto.crypt('password', '$invalid-algo$10000$abc') IS NULL;
+
+# Cleanup
+UNINSTALL EXTENSION vsql_crypto;

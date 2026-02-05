@@ -1,0 +1,7 @@
+{
+  "name": "vsql_crypto",
+  "version": "0.0.1",
+  "description": "Cryptographic functions for VillageSQL including hashing, encryption, and password functions",
+  "author": "VillageSQL Contributors",
+  "license": "GPL-2.0"
+}
