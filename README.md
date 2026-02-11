@@ -27,6 +27,8 @@ A comprehensive cryptographic extension for VillageSQL Server providing secure h
 - C++17 compatible compiler
 - OpenSSL development libraries
 
+📚 **Full Documentation**: Visit [villagesql.com/docs](https://villagesql.com/docs) for comprehensive guides on building extensions, architecture details, and more.
+
 #### Build Instructions
 
 1. Clone the repository (if not already done):
@@ -36,10 +38,19 @@ A comprehensive cryptographic extension for VillageSQL Server providing secure h
    ```
 
 2. Configure CMake with required paths:
+
+   **Linux:**
    ```bash
    mkdir build
    cd build
-   cmake .. -DVillageSQL_BUILD_DIR=/path/to/villagesql/build
+   cmake .. -DVillageSQL_BUILD_DIR=$HOME/build/villagesql
+   ```
+
+   **macOS:**
+   ```bash
+   mkdir build
+   cd build
+   cmake .. -DVillageSQL_BUILD_DIR=~/build/villagesql
    ```
 
    **Note**:
@@ -47,7 +58,7 @@ A comprehensive cryptographic extension for VillageSQL Server providing secure h
 
 3. Build the extension:
    ```bash
-   make
+   make -j $(($(getconf _NPROCESSORS_ONLN) - 2))
    ```
 
    This creates the `vsql_crypto.veb` package in the build directory.
@@ -74,11 +85,11 @@ After building the VEB package, install and use the extension in VillageSQL:
 INSTALL EXTENSION vsql_crypto;
 
 -- Verify the extension is loaded
-SELECT vsql_crypto.crypto_version();
+SELECT crypto_version();
 -- Returns: OpenSSL 3.x.x (or similar)
 ```
 
-All functions are accessed using the `vsql_crypto.` namespace prefix.
+Functions can be called with or without the extension prefix.
 
 ### Available Functions
 
@@ -87,7 +98,7 @@ All functions are accessed using the `vsql_crypto.` namespace prefix.
 **crypto_version()** - Check OpenSSL availability and version
 
 ```sql
-SELECT vsql_crypto.crypto_version();
+SELECTcrypto_version();
 -- Returns: OpenSSL version string (e.g., "OpenSSL 3.0.2 15 Mar 2022")
 ```
 
@@ -114,8 +125,8 @@ SELECT HEX(vsql_crypto.hmac('data', 'password', 'sha1'));
 
 ```sql
 -- Supported ciphers: aes (aes-128, aes-192, aes-256)
-SET @encrypted = vsql_crypto.encrypt('sensitive data', 'my-secret-key', 'aes-256');
-SET @encrypted = vsql_crypto.encrypt('text', 'sixteen-byte-key', 'aes');
+SET @encrypted =encrypt('sensitive data', 'my-secret-key', 'aes-256');
+SET @encrypted =encrypt('text', 'sixteen-byte-key', 'aes');
 ```
 
 **decrypt(data, key, type)** - Decrypt encrypted data
@@ -123,8 +134,8 @@ SET @encrypted = vsql_crypto.encrypt('text', 'sixteen-byte-key', 'aes');
 ```sql
 SET @plaintext = 'Hello, World!';
 SET @key = 'my-16-byte-key!!';
-SET @encrypted = vsql_crypto.encrypt(@plaintext, @key, 'aes');
-SELECT vsql_crypto.decrypt(@encrypted, @key, 'aes');
+SET @encrypted =encrypt(@plaintext, @key, 'aes');
+SELECTdecrypt(@encrypted, @key, 'aes');
 -- Returns: Hello, World!
 ```
 
@@ -140,7 +151,7 @@ SELECT HEX(vsql_crypto.gen_random_bytes(32));  -- 32 random bytes as hex
 **gen_random_uuid()** - Generate a random UUID (version 4)
 
 ```sql
-SELECT vsql_crypto.gen_random_uuid();
+SELECTgen_random_uuid();
 -- Returns: e.g., 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
 ```
 
@@ -150,12 +161,12 @@ SELECT vsql_crypto.gen_random_uuid();
 
 ```sql
 -- Generate salt for PBKDF2-SHA256
-SET @salt = vsql_crypto.gen_salt('pbkdf2-sha256', 100000);
-SET @salt512 = vsql_crypto.gen_salt('pbkdf2-sha512', 50000);
+SET @salt =gen_salt('pbkdf2-sha256', 100000);
+SET @salt512 =gen_salt('pbkdf2-sha512', 50000);
 
 -- Short type aliases are also supported
-SET @salt = vsql_crypto.gen_salt('sha256', 10000);  -- Same as pbkdf2-sha256
-SET @salt = vsql_crypto.gen_salt('sha512', 10000);  -- Same as pbkdf2-sha512
+SET @salt =gen_salt('sha256', 10000);  -- Same as pbkdf2-sha256
+SET @salt =gen_salt('sha512', 10000);  -- Same as pbkdf2-sha512
 ```
 
 Supported algorithms:
@@ -168,11 +179,11 @@ Recommended iteration count: 100,000 or higher (per OWASP guidelines)
 
 ```sql
 -- Hash a password
-SET @salt = vsql_crypto.gen_salt('pbkdf2-sha256', 10000);
-SET @hash = vsql_crypto.crypt('mypassword', @salt);
+SET @salt =gen_salt('pbkdf2-sha256', 10000);
+SET @hash =crypt('mypassword', @salt);
 
 -- Verify a password by comparing hashes
-SET @stored_hash = vsql_crypto.crypt('mypassword', @salt);
+SET @stored_hash =crypt('mypassword', @salt);
 SELECT @hash = @stored_hash;  -- Returns 1 if password matches
 ```
 
@@ -194,8 +205,18 @@ The extension includes comprehensive test files using the MySQL Test Runner (MTR
 
 This method assumes the VEB is already installed to your VillageSQL veb_dir.
 
+**Linux:**
 ```bash
-cd ~/build/mysql-test
+cd $HOME/build/villagesql/mysql-test
+perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test
+
+# Run individual test
+perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test crypto_basic
+```
+
+**macOS:**
+```bash
+cd ~/build/villagesql/mysql-test
 perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test
 
 # Run individual test
@@ -206,8 +227,16 @@ perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test crypto_basic
 
 Use this to test a specific VEB build without installing it first:
 
+**Linux:**
 ```bash
-cd ~/build/mysql-test
+cd $HOME/build/villagesql/mysql-test
+VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
+  perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test
+```
+
+**macOS:**
+```bash
+cd ~/build/villagesql/mysql-test
 VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
   perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test
 ```
@@ -216,8 +245,16 @@ VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
 
 To create or update expected test results:
 
+**Linux:**
 ```bash
-cd ~/build/mysql-test
+cd $HOME/build/villagesql/mysql-test
+VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
+  perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test --record
+```
+
+**macOS:**
+```bash
+cd ~/build/villagesql/mysql-test
 VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
   perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test --record
 ```
@@ -301,8 +338,38 @@ License information can be found in the [LICENSE](./LICENSE) file.
 
 VillageSQL welcomes contributions from the community. Please ensure all tests pass before submitting pull requests:
 
-1. Build the extension: `mkdir build && cd build && cmake .. && make`
-2. Run the test suite: `VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test`
+1. Build the extension:
+
+   **Linux:**
+   ```bash
+   mkdir build && cd build
+   cmake .. -DVillageSQL_BUILD_DIR=$HOME/build/villagesql
+   make -j $(($(getconf _NPROCESSORS_ONLN) - 2))
+   ```
+
+   **macOS:**
+   ```bash
+   mkdir build && cd build
+   cmake .. -DVillageSQL_BUILD_DIR=~/build/villagesql
+   make -j $(($(getconf _NPROCESSORS_ONLN) - 2))
+   ```
+
+2. Run the test suite:
+
+   **Linux:**
+   ```bash
+   cd $HOME/build/villagesql/mysql-test
+   VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
+     perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test
+   ```
+
+   **macOS:**
+   ```bash
+   cd ~/build/villagesql/mysql-test
+   VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
+     perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test
+   ```
+
 3. Submit your pull request with a clear description of changes
 
 ## Contact
