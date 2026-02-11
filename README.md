@@ -74,11 +74,9 @@ After building the VEB package, install and use the extension in VillageSQL:
 INSTALL EXTENSION vsql_crypto;
 
 -- Verify the extension is loaded
-SELECT vsql_crypto.crypto_version();
+SELECT crypto_version();
 -- Returns: OpenSSL 3.x.x (or similar)
 ```
-
-All functions are accessed using the `vsql_crypto.` namespace prefix.
 
 ### Available Functions
 
@@ -87,7 +85,7 @@ All functions are accessed using the `vsql_crypto.` namespace prefix.
 **crypto_version()** - Check OpenSSL availability and version
 
 ```sql
-SELECT vsql_crypto.crypto_version();
+SELECT crypto_version();
 -- Returns: OpenSSL version string (e.g., "OpenSSL 3.0.2 15 Mar 2022")
 ```
 
@@ -97,15 +95,15 @@ SELECT vsql_crypto.crypto_version();
 
 ```sql
 -- Supported algorithms: md5, sha1, sha224, sha256, sha384, sha512
-SELECT HEX(vsql_crypto.digest('test data', 'sha256'));
-SELECT HEX(vsql_crypto.digest('hello world', 'sha512'));
+SELECT HEX(digest('test data', 'sha256'));
+SELECT HEX(digest('hello world', 'sha512'));
 ```
 
 **hmac(data, key, type)** - Compute HMAC (Hash-based Message Authentication Code)
 
 ```sql
-SELECT HEX(vsql_crypto.hmac('message', 'secret_key', 'sha256'));
-SELECT HEX(vsql_crypto.hmac('data', 'password', 'sha1'));
+SELECT HEX(hmac('message', 'secret_key', 'sha256'));
+SELECT HEX(hmac('data', 'password', 'sha1'));
 ```
 
 #### Encryption Functions
@@ -114,8 +112,8 @@ SELECT HEX(vsql_crypto.hmac('data', 'password', 'sha1'));
 
 ```sql
 -- Supported ciphers: aes (aes-128, aes-192, aes-256)
-SET @encrypted = vsql_crypto.encrypt('sensitive data', 'my-secret-key', 'aes-256');
-SET @encrypted = vsql_crypto.encrypt('text', 'sixteen-byte-key', 'aes');
+SET @encrypted = encrypt('sensitive data', 'my-secret-key', 'aes-256');
+SET @encrypted = encrypt('text', 'sixteen-byte-key', 'aes');
 ```
 
 **decrypt(data, key, type)** - Decrypt encrypted data
@@ -123,8 +121,8 @@ SET @encrypted = vsql_crypto.encrypt('text', 'sixteen-byte-key', 'aes');
 ```sql
 SET @plaintext = 'Hello, World!';
 SET @key = 'my-16-byte-key!!';
-SET @encrypted = vsql_crypto.encrypt(@plaintext, @key, 'aes');
-SELECT vsql_crypto.decrypt(@encrypted, @key, 'aes');
+SET @encrypted = encrypt(@plaintext, @key, 'aes');
+SELECT decrypt(@encrypted, @key, 'aes');
 -- Returns: Hello, World!
 ```
 
@@ -133,14 +131,14 @@ SELECT vsql_crypto.decrypt(@encrypted, @key, 'aes');
 **gen_random_bytes(count)** - Generate cryptographically secure random bytes
 
 ```sql
-SELECT HEX(vsql_crypto.gen_random_bytes(16));  -- 16 random bytes as hex
-SELECT HEX(vsql_crypto.gen_random_bytes(32));  -- 32 random bytes as hex
+SELECT HEX(gen_random_bytes(16));  -- 16 random bytes as hex
+SELECT HEX(gen_random_bytes(32));  -- 32 random bytes as hex
 ```
 
 **gen_random_uuid()** - Generate a random UUID (version 4)
 
 ```sql
-SELECT vsql_crypto.gen_random_uuid();
+SELECT gen_random_uuid();
 -- Returns: e.g., 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
 ```
 
@@ -150,12 +148,12 @@ SELECT vsql_crypto.gen_random_uuid();
 
 ```sql
 -- Generate salt for PBKDF2-SHA256
-SET @salt = vsql_crypto.gen_salt('pbkdf2-sha256', 100000);
-SET @salt512 = vsql_crypto.gen_salt('pbkdf2-sha512', 50000);
+SET @salt = gen_salt('pbkdf2-sha256', 100000);
+SET @salt512 = gen_salt('pbkdf2-sha512', 50000);
 
 -- Short type aliases are also supported
-SET @salt = vsql_crypto.gen_salt('sha256', 10000);  -- Same as pbkdf2-sha256
-SET @salt = vsql_crypto.gen_salt('sha512', 10000);  -- Same as pbkdf2-sha512
+SET @salt = gen_salt('sha256', 10000);  -- Same as pbkdf2-sha256
+SET @salt = gen_salt('sha512', 10000);  -- Same as pbkdf2-sha512
 ```
 
 Supported algorithms:
@@ -168,11 +166,11 @@ Recommended iteration count: 100,000 or higher (per OWASP guidelines)
 
 ```sql
 -- Hash a password
-SET @salt = vsql_crypto.gen_salt('pbkdf2-sha256', 10000);
-SET @hash = vsql_crypto.crypt('mypassword', @salt);
+SET @salt = gen_salt('pbkdf2-sha256', 10000);
+SET @hash = crypt('mypassword', @salt);
 
 -- Verify a password by comparing hashes
-SET @stored_hash = vsql_crypto.crypt('mypassword', @salt);
+SET @stored_hash = crypt('mypassword', @salt);
 SELECT @hash = @stored_hash;  -- Returns 1 if password matches
 ```
 

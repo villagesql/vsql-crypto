@@ -1,7 +1,7 @@
 # Test basic cryptographic functions
 
 # Setup: Copy VEB to veb_dir if VSQL_CRYPTO_VEB is set, then install extension
---let $veb_dest = `SELECT CONCAT(@@veb_dir, '/vsql_crypto.veb')`
+--let $veb_dest = `SELECT CONCAT(@@veb_dir, '/veb')`
 if ($VSQL_CRYPTO_VEB) {
   --error 0,1
   --remove_file $veb_dest
@@ -10,88 +10,88 @@ if ($VSQL_CRYPTO_VEB) {
 INSTALL EXTENSION vsql_crypto;
 
 # Test OpenSSL availability
-SELECT LENGTH(vsql_crypto.crypto_version()) > 0;
+SELECT LENGTH(crypto_version()) > 0;
 
 # Test digest function with different algorithms
-SELECT HEX(vsql_crypto.digest('test', 'md5'));
-SELECT HEX(vsql_crypto.digest('test', 'sha1'));
-SELECT HEX(vsql_crypto.digest('test', 'sha224'));
-SELECT HEX(vsql_crypto.digest('test', 'sha256'));
-SELECT HEX(vsql_crypto.digest('test', 'sha384'));
-SELECT HEX(vsql_crypto.digest('test', 'sha512'));
+SELECT HEX(digest('test', 'md5'));
+SELECT HEX(digest('test', 'sha1'));
+SELECT HEX(digest('test', 'sha224'));
+SELECT HEX(digest('test', 'sha256'));
+SELECT HEX(digest('test', 'sha384'));
+SELECT HEX(digest('test', 'sha512'));
 
 # Test digest with empty string
-SELECT HEX(vsql_crypto.digest('', 'sha256'));
+SELECT HEX(digest('', 'sha256'));
 
 # Test hmac function
-SELECT HEX(vsql_crypto.hmac('test', 'key', 'sha256'));
-SELECT HEX(vsql_crypto.hmac('data', 'secret', 'sha1'));
-SELECT HEX(vsql_crypto.hmac('message', 'password', 'md5'));
+SELECT HEX(hmac('test', 'key', 'sha256'));
+SELECT HEX(hmac('data', 'secret', 'sha1'));
+SELECT HEX(hmac('message', 'password', 'md5'));
 
 # Test gen_random_uuid
-SELECT LENGTH(vsql_crypto.gen_random_uuid());
-SELECT vsql_crypto.gen_random_uuid() != vsql_crypto.gen_random_uuid();
+SELECT LENGTH(gen_random_uuid());
+SELECT gen_random_uuid() != gen_random_uuid();
 
 # Test gen_random_bytes
-SELECT LENGTH(vsql_crypto.gen_random_bytes(16));
-SELECT LENGTH(vsql_crypto.gen_random_bytes(32));
-SELECT LENGTH(vsql_crypto.gen_random_bytes(1));
+SELECT LENGTH(gen_random_bytes(16));
+SELECT LENGTH(gen_random_bytes(32));
+SELECT LENGTH(gen_random_bytes(1));
 
 # Test encrypt/decrypt with AES
 SET @plaintext = 'Hello, World!';
 SET @key = 'my-secret-key-16';
-SET @encrypted = vsql_crypto.encrypt(@plaintext, @key, 'aes');
-SELECT vsql_crypto.decrypt(@encrypted, @key, 'aes') = @plaintext;
+SET @encrypted = encrypt(@plaintext, @key, 'aes');
+SELECT decrypt(@encrypted, @key, 'aes') = @plaintext;
 
 # Test encrypt/decrypt with different data
 SET @data = 'The quick brown fox jumps over the lazy dog';
 SET @key256 = 'this-is-a-32-byte-key-for-aes';
-SET @enc = vsql_crypto.encrypt(@data, @key256, 'aes-256');
-SELECT vsql_crypto.decrypt(@enc, @key256, 'aes-256') = @data;
+SET @enc = encrypt(@data, @key256, 'aes-256');
+SELECT decrypt(@enc, @key256, 'aes-256') = @data;
 
 # Test with binary data
 SET @binary = UNHEX('DEADBEEF');
 SET @key_aes = 'sixteen-byte-key';
-SET @enc_aes = vsql_crypto.encrypt(@binary, @key_aes, 'aes');
-SELECT HEX(vsql_crypto.decrypt(@enc_aes, @key_aes, 'aes'));
+SET @enc_aes = encrypt(@binary, @key_aes, 'aes');
+SELECT HEX(decrypt(@enc_aes, @key_aes, 'aes'));
 
 # Test AES-128 explicitly
 SET @data128 = 'AES-128 test data';
 SET @key128 = 'sixteen-byte-key';
-SET @enc128 = vsql_crypto.encrypt(@data128, @key128, 'aes-128');
-SELECT vsql_crypto.decrypt(@enc128, @key128, 'aes-128') = @data128;
+SET @enc128 = encrypt(@data128, @key128, 'aes-128');
+SELECT decrypt(@enc128, @key128, 'aes-128') = @data128;
 
 # Test AES-192
 SET @data192 = 'AES-192 test data';
 SET @key192 = 'twentyfour-byte-key-here!';
-SET @enc192 = vsql_crypto.encrypt(@data192, @key192, 'aes-192');
-SELECT vsql_crypto.decrypt(@enc192, @key192, 'aes-192') = @data192;
+SET @enc192 = encrypt(@data192, @key192, 'aes-192');
+SELECT decrypt(@enc192, @key192, 'aes-192') = @data192;
 
 # Test password hashing with gen_salt and crypt
 # Test PBKDF2-SHA256
-SET @salt256 = vsql_crypto.gen_salt('pbkdf2-sha256', 10000);
+SET @salt256 = gen_salt('pbkdf2-sha256', 10000);
 SELECT @salt256 LIKE '$pbkdf2-sha256$10000$%';
-SET @hash256 = vsql_crypto.crypt('mypassword', @salt256);
+SET @hash256 = crypt('mypassword', @salt256);
 SELECT @hash256 LIKE '$pbkdf2-sha256$10000$%$%';
 
 # Verify same password produces same hash
-SET @hash256_verify = vsql_crypto.crypt('mypassword', @salt256);
+SET @hash256_verify = crypt('mypassword', @salt256);
 SELECT @hash256 = @hash256_verify;
 
 # Verify different password produces different hash
-SET @hash256_wrong = vsql_crypto.crypt('wrongpassword', @salt256);
+SET @hash256_wrong = crypt('wrongpassword', @salt256);
 SELECT @hash256 != @hash256_wrong;
 
 # Test PBKDF2-SHA512
-SET @salt512 = vsql_crypto.gen_salt('pbkdf2-sha512', 10000);
+SET @salt512 = gen_salt('pbkdf2-sha512', 10000);
 SELECT @salt512 LIKE '$pbkdf2-sha512$10000$%';
-SET @hash512 = vsql_crypto.crypt('mypassword', @salt512);
+SET @hash512 = crypt('mypassword', @salt512);
 SELECT @hash512 LIKE '$pbkdf2-sha512$10000$%$%';
 
 # Test short type aliases
-SET @salt_short = vsql_crypto.gen_salt('sha256', 5000);
+SET @salt_short = gen_salt('sha256', 5000);
 SELECT @salt_short LIKE '$pbkdf2-sha256$5000$%';
-SET @salt_short512 = vsql_crypto.gen_salt('sha512', 5000);
+SET @salt_short512 = gen_salt('sha512', 5000);
 SELECT @salt_short512 LIKE '$pbkdf2-sha512$5000$%';
 
 # Cleanup

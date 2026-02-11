@@ -55,17 +55,15 @@ See `AGENTS.local.md` for machine-specific build paths and configurations.
 
 **Available Functions:**
 
-All functions are accessed using the `vsql_crypto.` namespace prefix:
-
-- `vsql_crypto.crypto_version()` - Return OpenSSL version information
-- `vsql_crypto.digest(data, type)` - Compute cryptographic hash (MD5, SHA-1, SHA-224, SHA-256, SHA-384, SHA-512)
-- `vsql_crypto.hmac(data, key, type)` - Compute HMAC (Hash-based Message Authentication Code)
-- `vsql_crypto.encrypt(data, key, type)` - Encrypt data with AES (128/192/256-bit)
-- `vsql_crypto.decrypt(data, key, type)` - Decrypt encrypted data
-- `vsql_crypto.gen_salt(type, iter_count)` - Generate salt for password hashing using PBKDF2 (SHA-256/SHA-512)
-- `vsql_crypto.crypt(password, salt)` - Hash password using PBKDF2 with configurable iterations
-- `vsql_crypto.gen_random_bytes(count)` - Generate cryptographically secure random bytes
-- `vsql_crypto.gen_random_uuid()` - Generate random UUID v4
+- `crypto_version()` - Return OpenSSL version information
+- `digest(data, type)` - Compute cryptographic hash (MD5, SHA-1, SHA-224, SHA-256, SHA-384, SHA-512)
+- `hmac(data, key, type)` - Compute HMAC (Hash-based Message Authentication Code)
+- `encrypt(data, key, type)` - Encrypt data with AES (128/192/256-bit)
+- `decrypt(data, key, type)` - Decrypt encrypted data
+- `gen_salt(type, iter_count)` - Generate salt for password hashing using PBKDF2 (SHA-256/SHA-512)
+- `crypt(password, salt)` - Hash password using PBKDF2 with configurable iterations
+- `gen_random_bytes(count)` - Generate cryptographically secure random bytes
+- `gen_random_uuid()` - Generate random UUID v4
 
 **Error Handling:**
 - Functions return NULL for invalid inputs (unsupported algorithms, NULL arguments, corrupted data)
