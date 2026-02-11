@@ -22,8 +22,6 @@
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <openssl/rand.h>
-#include <openssl/md5.h>
-#include <openssl/sha.h>
 
 using namespace villagesql::extension_builder;
 using namespace villagesql::func_builder;
