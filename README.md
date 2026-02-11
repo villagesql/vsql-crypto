@@ -27,6 +27,8 @@ A comprehensive cryptographic extension for VillageSQL Server providing secure h
 - C++17 compatible compiler
 - OpenSSL development libraries
 
+📚 **Full Documentation**: Visit [villagesql.com/docs](https://villagesql.com/docs) for comprehensive guides on building extensions, architecture details, and more.
+
 #### Build Instructions
 
 1. Clone the repository (if not already done):
@@ -36,10 +38,19 @@ A comprehensive cryptographic extension for VillageSQL Server providing secure h
    ```
 
 2. Configure CMake with required paths:
+
+   **Linux:**
    ```bash
    mkdir build
    cd build
-   cmake .. -DVillageSQL_BUILD_DIR=/path/to/villagesql/build
+   cmake .. -DVillageSQL_BUILD_DIR=$HOME/build/villagesql
+   ```
+
+   **macOS:**
+   ```bash
+   mkdir build
+   cd build
+   cmake .. -DVillageSQL_BUILD_DIR=~/build/villagesql
    ```
 
    **Note**:
@@ -47,7 +58,7 @@ A comprehensive cryptographic extension for VillageSQL Server providing secure h
 
 3. Build the extension:
    ```bash
-   make
+   make -j $(($(getconf _NPROCESSORS_ONLN) - 2))
    ```
 
    This creates the `vsql_crypto.veb` package in the build directory.
@@ -192,8 +203,18 @@ The extension includes comprehensive test files using the MySQL Test Runner (MTR
 
 This method assumes the VEB is already installed to your VillageSQL veb_dir.
 
+**Linux:**
 ```bash
-cd ~/build/mysql-test
+cd $HOME/build/villagesql/mysql-test
+perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test
+
+# Run individual test
+perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test crypto_basic
+```
+
+**macOS:**
+```bash
+cd ~/build/villagesql/mysql-test
 perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test
 
 # Run individual test
@@ -204,8 +225,16 @@ perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test crypto_basic
 
 Use this to test a specific VEB build without installing it first:
 
+**Linux:**
 ```bash
-cd ~/build/mysql-test
+cd $HOME/build/villagesql/mysql-test
+VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
+  perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test
+```
+
+**macOS:**
+```bash
+cd ~/build/villagesql/mysql-test
 VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
   perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test
 ```
@@ -214,8 +243,16 @@ VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
 
 To create or update expected test results:
 
+**Linux:**
 ```bash
-cd ~/build/mysql-test
+cd $HOME/build/villagesql/mysql-test
+VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
+  perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test --record
+```
+
+**macOS:**
+```bash
+cd ~/build/villagesql/mysql-test
 VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
   perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test --record
 ```
@@ -299,8 +336,38 @@ License information can be found in the [LICENSE](./LICENSE) file.
 
 VillageSQL welcomes contributions from the community. Please ensure all tests pass before submitting pull requests:
 
-1. Build the extension: `mkdir build && cd build && cmake .. && make`
-2. Run the test suite: `VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test`
+1. Build the extension:
+
+   **Linux:**
+   ```bash
+   mkdir build && cd build
+   cmake .. -DVillageSQL_BUILD_DIR=$HOME/build/villagesql
+   make -j $(($(getconf _NPROCESSORS_ONLN) - 2))
+   ```
+
+   **macOS:**
+   ```bash
+   mkdir build && cd build
+   cmake .. -DVillageSQL_BUILD_DIR=~/build/villagesql
+   make -j $(($(getconf _NPROCESSORS_ONLN) - 2))
+   ```
+
+2. Run the test suite:
+
+   **Linux:**
+   ```bash
+   cd $HOME/build/villagesql/mysql-test
+   VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
+     perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test
+   ```
+
+   **macOS:**
+   ```bash
+   cd ~/build/villagesql/mysql-test
+   VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
+     perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test
+   ```
+
 3. Submit your pull request with a clear description of changes
 
 ## Contact
