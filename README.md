@@ -6,7 +6,7 @@ A comprehensive cryptographic extension for VillageSQL Server providing secure h
 
 ## Features
 
-- **PostgreSQL Compatibility**: Implements pgcrypto-compatible functions for seamless migration
+- **PostgreSQL Compatibility**: Implements pgcrypto-compatible functions for easy migration
 - **General Hashing**: MD5, SHA-1, SHA-224, SHA-256, SHA-384, SHA-512 with `digest()` and `hmac()` functions
 - **AES Encryption**: Full AES support with 128/192/256-bit keys and automatic IV management
 - **Password Security**: PBKDF2-based password hashing with configurable iterations (SHA-256/SHA-512)
