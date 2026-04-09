@@ -206,19 +206,19 @@ This method assumes the VEB is already installed to your VillageSQL veb_dir.
 **Linux:**
 ```bash
 cd $HOME/build/villagesql/mysql-test
-perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test
+perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test
 
 # Run individual test
-perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test crypto_basic
+perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test crypto_basic
 ```
 
 **macOS:**
 ```bash
 cd ~/build/villagesql/mysql-test
-perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test
+perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test
 
 # Run individual test
-perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test crypto_basic
+perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test crypto_basic
 ```
 
 **Option 2: Using a specific VEB file**
@@ -229,14 +229,14 @@ Use this to test a specific VEB build without installing it first:
 ```bash
 cd $HOME/build/villagesql/mysql-test
 VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
-  perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test
+  perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test
 ```
 
 **macOS:**
 ```bash
 cd ~/build/villagesql/mysql-test
 VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
-  perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test
+  perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test
 ```
 
 ### Creating or Updating Test Results
@@ -247,14 +247,14 @@ To create or update expected test results:
 ```bash
 cd $HOME/build/villagesql/mysql-test
 VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
-  perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test --record
+  perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test --record
 ```
 
 **macOS:**
 ```bash
 cd ~/build/villagesql/mysql-test
 VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
-  perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test --record
+  perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test --record
 ```
 
 **Note on Error Handling**: Functions return NULL for invalid inputs (e.g., unsupported algorithms, NULL arguments) rather than throwing SQL errors. The error tests verify this behavior.
@@ -293,7 +293,7 @@ vsql-crypto/
 │   └── crypto.cc            # VDF implementations and extension registration
 ├── cmake/
 │   └── FindVillageSQL.cmake # CMake module to locate VillageSQL SDK
-├── test/                    # MTR test suite
+├── mysql-test/              # MTR test suite
 │   ├── t/                   # Test files (.test)
 │   └── r/                   # Expected results (.result)
 ├── manifest.json            # VEB package manifest
@@ -358,14 +358,14 @@ VillageSQL welcomes contributions from the community. Please ensure all tests pa
    ```bash
    cd $HOME/build/villagesql/mysql-test
    VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
-     perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test
+     perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test
    ```
 
    **macOS:**
    ```bash
    cd ~/build/villagesql/mysql-test
    VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
-     perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test
+     perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test
    ```
 
 3. Submit your pull request with a clear description of changes
