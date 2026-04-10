@@ -50,8 +50,8 @@ See `AGENTS.local.md` for machine-specific build paths and configurations.
 - `manifest.json` - Extension metadata (name, version, description, author, license)
 - `CMakeLists.txt` - CMake build configuration
 - `cmake/FindVillageSQL.cmake` - CMake module to locate VillageSQL SDK
-- `test/t/` - Test files directory (`.test` files using MTR framework)
-- `test/r/` - Expected test results directory (`.result` files)
+- `mysql-test/t/` - Test files directory (`.test` files using MTR framework)
+- `mysql-test/r/` - Expected test results directory (`.result` files)
 
 **Available Functions:**
 
@@ -145,8 +145,8 @@ VEF_GENERATE_ENTRY_POINTS(
 
 The extension includes comprehensive test files using the MySQL Test Runner (MTR) framework:
 - **Test Location**:
-  - `test/t/` directory contains `.test` files with SQL test commands
-  - `test/r/` directory contains `.result` files with expected output
+  - `mysql-test/t/` directory contains `.test` files with SQL test commands
+  - `mysql-test/r/` directory contains `.result` files with expected output
 - **Test Files**:
   - `crypto_basic.test` - Tests all functions with valid inputs (happy path)
   - `crypto_errors.test` - Tests error handling for invalid inputs, NULL values, and edge cases
@@ -159,10 +159,10 @@ This method assumes the VEB is already installed to your VillageSQL veb_dir:
 
 ```bash
 cd /path/to/mysql-test
-perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test
+perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test
 
 # Run individual test
-perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test crypto_basic
+perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test crypto_basic
 ```
 
 **Option 2: Using a specific VEB file**
@@ -172,7 +172,7 @@ Use this to test a specific VEB build without installing it first:
 ```bash
 cd /path/to/mysql-test
 VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
-  perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test
+  perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test
 ```
 
 ### Creating or Updating Test Results
@@ -182,7 +182,7 @@ Use `--record` flag to generate or update expected `.result` files:
 ```bash
 cd /path/to/mysql-test
 VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
-  perl mysql-test-run.pl --suite=/path/to/vsql-crypto/test --record
+  perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test --record
 ```
 
 ### Test Guidelines
@@ -222,8 +222,8 @@ To add new cryptographic functions to this extension:
    - Use `make_func<&func_impl>("function_name")` with appropriate `.returns()`, `.param()`, and `.buffer_size()` settings
 
 3. **Create tests**:
-   - Add happy path tests to `test/t/crypto_basic.test` or create new test files
-   - Add error handling tests to `test/t/crypto_errors.test`
+   - Add happy path tests to `mysql-test/t/crypto_basic.test` or create new test files
+   - Add error handling tests to `mysql-test/t/crypto_errors.test`
    - Generate expected results using `--record` flag
    - Test various inputs including edge cases, NULL values, and invalid parameters
 
@@ -263,7 +263,7 @@ When asked to add functionality to this extension:
 2. **Modifying build**: Edit CMakeLists.txt, ensure proper library linking
 3. **Adding dependencies**: Update CMakeLists.txt with find_package() or target_link_libraries()
 4. **Testing**:
-   - Create or update `.test` files in `test/t/` directory
+   - Create or update `.test` files in `mysql-test/t/` directory
    - Add both valid input tests (crypto_basic.test) and error handling tests (crypto_errors.test)
    - Generate expected results with `--record` flag
    - Verify all tests pass with `perl mysql-test-run.pl --suite=<path>`
