@@ -14,7 +14,7 @@
  * along with this program; if not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <villagesql/extension.h>
+#include <villagesql/vsql.h>
 
 #include <cstring>
 #include <string>
@@ -23,17 +23,15 @@
 #include <openssl/hmac.h>
 #include <openssl/rand.h>
 
-using namespace villagesql::extension_builder;
-using namespace villagesql::func_builder;
-using namespace villagesql::type_builder;
+using namespace vsql;
 
 // =============================================================================
 // Helper Functions
 // =============================================================================
 
 // Get OpenSSL digest algorithm by name
-static const EVP_MD* get_digest_algorithm(const char* algo, size_t algo_len) {
-    std::string alg(algo, algo_len);
+static const EVP_MD* get_digest_algorithm(std::string_view algo_sv) {
+    std::string alg(algo_sv);
     std::transform(alg.begin(), alg.end(), alg.begin(), ::tolower);
 
     if (alg == "md5") return EVP_md5();
@@ -115,114 +113,108 @@ static int base64_decode(const std::string& encoded, unsigned char* decoded, siz
 // =============================================================================
 
 // crypto_version() - Returns OpenSSL version
-void crypto_version_impl(vef_context_t* ctx, vef_vdf_result_t* result) {
+void crypto_version_impl(StringResult result) {
     const char* version_str = OpenSSL_version(OPENSSL_VERSION);
-    size_t len = strlen(version_str);
-
-    if (len >= sizeof(result->str_buf)) {
-        len = sizeof(result->str_buf) - 1;
-    }
-
-    memcpy(result->str_buf, version_str, len);
-    result->str_buf[len] = '\0';
-    result->type = VEF_RESULT_VALUE;
-    result->actual_len = len;
+    result.set(version_str);
 }
 
 // digest(data, type) - Compute hash of data
-void digest_impl(vef_context_t* ctx,
-                 vef_invalue_t* data_arg, vef_invalue_t* type_arg,
-                 vef_vdf_result_t* result) {
-    if (data_arg->is_null || type_arg->is_null) {
-        result->type = VEF_RESULT_NULL;
+void digest_impl(StringArg data_arg, StringArg type_arg, StringResult result) {
+    if (data_arg.is_null() || type_arg.is_null()) {
+        result.set_null();
         return;
     }
 
-    const EVP_MD* md = get_digest_algorithm(type_arg->str_value, type_arg->str_len);
+    const EVP_MD* md = get_digest_algorithm(type_arg.value());
     if (!md) {
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
 
     EVP_MD_CTX* md_ctx = EVP_MD_CTX_new();
     if (!md_ctx) {
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
 
+    auto data_sv = data_arg.value();
+    auto buf = result.buffer();
+
     unsigned int digest_len;
     if (EVP_DigestInit_ex(md_ctx, md, nullptr) != 1 ||
-        EVP_DigestUpdate(md_ctx, data_arg->bin_value, data_arg->bin_len) != 1 ||
-        EVP_DigestFinal_ex(md_ctx, result->bin_buf, &digest_len) != 1) {
+        EVP_DigestUpdate(md_ctx, data_sv.data(), data_sv.size()) != 1 ||
+        EVP_DigestFinal_ex(md_ctx,
+                           reinterpret_cast<unsigned char*>(buf.data()),
+                           &digest_len) != 1) {
         EVP_MD_CTX_free(md_ctx);
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
 
     EVP_MD_CTX_free(md_ctx);
-    result->type = VEF_RESULT_VALUE;
-    result->actual_len = digest_len;
+    result.set_length(digest_len);
 }
 
 // hmac(data, key, type) - Compute HMAC
-void hmac_impl(vef_context_t* ctx,
-               vef_invalue_t* data_arg, vef_invalue_t* key_arg, vef_invalue_t* type_arg,
-               vef_vdf_result_t* result) {
-    if (data_arg->is_null || key_arg->is_null || type_arg->is_null) {
-        result->type = VEF_RESULT_NULL;
+void hmac_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
+               StringResult result) {
+    if (data_arg.is_null() || key_arg.is_null() || type_arg.is_null()) {
+        result.set_null();
         return;
     }
 
-    const EVP_MD* md = get_digest_algorithm(type_arg->str_value, type_arg->str_len);
+    const EVP_MD* md = get_digest_algorithm(type_arg.value());
     if (!md) {
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
+
+    auto data_sv = data_arg.value();
+    auto key_sv = key_arg.value();
+    auto buf = result.buffer();
 
     unsigned int hmac_len;
-    if (!HMAC(md, key_arg->bin_value, key_arg->bin_len,
-              data_arg->bin_value, data_arg->bin_len,
-              result->bin_buf, &hmac_len)) {
-        result->type = VEF_RESULT_NULL;
+    if (!HMAC(md,
+              key_sv.data(), key_sv.size(),
+              reinterpret_cast<const unsigned char*>(data_sv.data()), data_sv.size(),
+              reinterpret_cast<unsigned char*>(buf.data()), &hmac_len)) {
+        result.set_null();
         return;
     }
 
-    result->type = VEF_RESULT_VALUE;
-    result->actual_len = hmac_len;
+    result.set_length(hmac_len);
 }
 
 // gen_random_bytes(count) - Generate random bytes
-void gen_random_bytes_impl(vef_context_t* ctx,
-                           vef_invalue_t* count_arg,
-                           vef_vdf_result_t* result) {
-    if (count_arg->is_null) {
-        result->type = VEF_RESULT_NULL;
+void gen_random_bytes_impl(IntArg count_arg, StringResult result) {
+    if (count_arg.is_null()) {
+        result.set_null();
         return;
     }
 
-    long long count = count_arg->int_value;
+    long long count = count_arg.value();
 
     if (count <= 0 || count > 1024) {
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
 
-    if (RAND_bytes(result->bin_buf, count) != 1) {
-        result->type = VEF_RESULT_NULL;
+    auto buf = result.buffer();
+    if (RAND_bytes(reinterpret_cast<unsigned char*>(buf.data()),
+                   static_cast<int>(count)) != 1) {
+        result.set_null();
         return;
     }
 
-    result->type = VEF_RESULT_VALUE;
-    result->actual_len = count;
+    result.set_length(static_cast<size_t>(count));
 }
 
 // gen_random_uuid() - Generate random UUID (version 4)
-void gen_random_uuid_impl(vef_context_t* ctx, vef_vdf_result_t* result) {
+void gen_random_uuid_impl(StringResult result) {
     unsigned char uuid_bytes[16];
 
     if (RAND_bytes(uuid_bytes, 16) != 1) {
-        result->type = VEF_RESULT_ERROR;
-        strcpy(result->error_msg, "Failed to generate random bytes");
+        result.warning("Failed to generate random bytes");
         return;
     }
 
@@ -232,55 +224,56 @@ void gen_random_uuid_impl(vef_context_t* ctx, vef_vdf_result_t* result) {
 
     // Format as UUID string manually
     static const char hex_chars[] = "0123456789abcdef";
+    auto buf = result.buffer();
     size_t pos = 0;
 
     for (size_t i = 0; i < 16; ++i) {
         unsigned char byte = uuid_bytes[i];
-        result->str_buf[pos++] = hex_chars[byte >> 4];
-        result->str_buf[pos++] = hex_chars[byte & 0x0F];
+        buf[pos++] = hex_chars[byte >> 4];
+        buf[pos++] = hex_chars[byte & 0x0F];
 
         // Add hyphens at positions after bytes 3, 5, 7, 9
         if (i == 3 || i == 5 || i == 7 || i == 9) {
-            result->str_buf[pos++] = '-';
+            buf[pos++] = '-';
         }
     }
 
-    result->type = VEF_RESULT_VALUE;
-    result->actual_len = 36;
+    result.set_length(36);
 }
 
 // encrypt(data, key, type) - Encrypt data with various ciphers
-void encrypt_impl(vef_context_t* ctx,
-                  vef_invalue_t* data_arg, vef_invalue_t* key_arg, vef_invalue_t* type_arg,
-                  vef_vdf_result_t* result) {
-    if (data_arg->is_null || key_arg->is_null || type_arg->is_null) {
-        result->type = VEF_RESULT_NULL;
+void encrypt_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
+                  StringResult result) {
+    if (data_arg.is_null() || key_arg.is_null() || type_arg.is_null()) {
+        result.set_null();
         return;
     }
 
     // Parse cipher type
-    std::string cipher_str(type_arg->str_value, type_arg->str_len);
+    std::string cipher_str(type_arg.value());
     std::transform(cipher_str.begin(), cipher_str.end(), cipher_str.begin(), ::tolower);
+
+    auto key_sv = key_arg.value();
 
     const EVP_CIPHER* cipher = nullptr;
     if (cipher_str.find("aes") != std::string::npos) {
-        if (cipher_str.find("128") != std::string::npos || key_arg->bin_len == 16) {
+        if (cipher_str.find("128") != std::string::npos || key_sv.size() == 16) {
             cipher = EVP_aes_128_cbc();
-        } else if (cipher_str.find("192") != std::string::npos || key_arg->bin_len == 24) {
+        } else if (cipher_str.find("192") != std::string::npos || key_sv.size() == 24) {
             cipher = EVP_aes_192_cbc();
-        } else if (cipher_str.find("256") != std::string::npos || key_arg->bin_len == 32) {
+        } else if (cipher_str.find("256") != std::string::npos || key_sv.size() == 32) {
             cipher = EVP_aes_256_cbc();
         } else {
             cipher = EVP_aes_128_cbc();  // Default
         }
     } else {
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
 
     EVP_CIPHER_CTX* cipher_ctx = EVP_CIPHER_CTX_new();
     if (!cipher_ctx) {
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
 
@@ -289,146 +282,155 @@ void encrypt_impl(vef_context_t* ctx,
     int iv_len = EVP_CIPHER_iv_length(cipher);
     if (RAND_bytes(iv, iv_len) != 1) {
         EVP_CIPHER_CTX_free(cipher_ctx);
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
 
-    // Copy IV to output buffer
-    memcpy(result->bin_buf, iv, iv_len);
+    auto buf = result.buffer();
+    auto* out_ptr = reinterpret_cast<unsigned char*>(buf.data());
 
+    // Copy IV to output buffer
+    memcpy(out_ptr, iv, iv_len);
+
+    auto data_sv = data_arg.value();
     int out_len = 0, final_len = 0;
 
     // Initialize encryption
-    if (EVP_EncryptInit_ex(cipher_ctx, cipher, nullptr, key_arg->bin_value, iv) != 1) {
+    if (EVP_EncryptInit_ex(cipher_ctx, cipher, nullptr,
+                           reinterpret_cast<const unsigned char*>(key_sv.data()),
+                           iv) != 1) {
         EVP_CIPHER_CTX_free(cipher_ctx);
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
 
     // Encrypt data
-    if (EVP_EncryptUpdate(cipher_ctx, result->bin_buf + iv_len, &out_len,
-                         data_arg->bin_value, data_arg->bin_len) != 1) {
+    if (EVP_EncryptUpdate(cipher_ctx, out_ptr + iv_len, &out_len,
+                          reinterpret_cast<const unsigned char*>(data_sv.data()),
+                          static_cast<int>(data_sv.size())) != 1) {
         EVP_CIPHER_CTX_free(cipher_ctx);
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
 
     // Finalize encryption
-    if (EVP_EncryptFinal_ex(cipher_ctx, result->bin_buf + iv_len + out_len, &final_len) != 1) {
+    if (EVP_EncryptFinal_ex(cipher_ctx, out_ptr + iv_len + out_len, &final_len) != 1) {
         EVP_CIPHER_CTX_free(cipher_ctx);
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
 
     EVP_CIPHER_CTX_free(cipher_ctx);
-
-    result->type = VEF_RESULT_VALUE;
-    result->actual_len = iv_len + out_len + final_len;
+    result.set_length(static_cast<size_t>(iv_len + out_len + final_len));
 }
 
 // decrypt(data, key, type) - Decrypt data
-void decrypt_impl(vef_context_t* ctx,
-                  vef_invalue_t* data_arg, vef_invalue_t* key_arg, vef_invalue_t* type_arg,
-                  vef_vdf_result_t* result) {
-    if (data_arg->is_null || key_arg->is_null || type_arg->is_null) {
-        result->type = VEF_RESULT_NULL;
+void decrypt_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
+                  StringResult result) {
+    if (data_arg.is_null() || key_arg.is_null() || type_arg.is_null()) {
+        result.set_null();
         return;
     }
 
     // Parse cipher type
-    std::string cipher_str(type_arg->str_value, type_arg->str_len);
+    std::string cipher_str(type_arg.value());
     std::transform(cipher_str.begin(), cipher_str.end(), cipher_str.begin(), ::tolower);
+
+    auto key_sv = key_arg.value();
 
     const EVP_CIPHER* cipher = nullptr;
     if (cipher_str.find("aes") != std::string::npos) {
-        if (cipher_str.find("128") != std::string::npos || key_arg->bin_len == 16) {
+        if (cipher_str.find("128") != std::string::npos || key_sv.size() == 16) {
             cipher = EVP_aes_128_cbc();
-        } else if (cipher_str.find("192") != std::string::npos || key_arg->bin_len == 24) {
+        } else if (cipher_str.find("192") != std::string::npos || key_sv.size() == 24) {
             cipher = EVP_aes_192_cbc();
-        } else if (cipher_str.find("256") != std::string::npos || key_arg->bin_len == 32) {
+        } else if (cipher_str.find("256") != std::string::npos || key_sv.size() == 32) {
             cipher = EVP_aes_256_cbc();
         } else {
             cipher = EVP_aes_128_cbc();
         }
     } else {
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
 
     int iv_len = EVP_CIPHER_iv_length(cipher);
-    if (data_arg->bin_len < (size_t)iv_len) {
-        result->type = VEF_RESULT_NULL;
+    auto data_sv = data_arg.value();
+    if (data_sv.size() < static_cast<size_t>(iv_len)) {
+        result.set_null();
         return;
     }
 
     // Extract IV from beginning of data
-    const unsigned char* iv = data_arg->bin_value;
-    const unsigned char* encrypted_data = data_arg->bin_value + iv_len;
-    size_t encrypted_len = data_arg->bin_len - iv_len;
+    const auto* raw_data = reinterpret_cast<const unsigned char*>(data_sv.data());
+    const unsigned char* iv = raw_data;
+    const unsigned char* encrypted_data = raw_data + iv_len;
+    size_t encrypted_len = data_sv.size() - iv_len;
 
     EVP_CIPHER_CTX* cipher_ctx = EVP_CIPHER_CTX_new();
     if (!cipher_ctx) {
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
 
+    auto buf = result.buffer();
+    auto* out_ptr = reinterpret_cast<unsigned char*>(buf.data());
     int out_len = 0, final_len = 0;
 
     // Initialize decryption
-    if (EVP_DecryptInit_ex(cipher_ctx, cipher, nullptr, key_arg->bin_value, iv) != 1) {
+    if (EVP_DecryptInit_ex(cipher_ctx, cipher, nullptr,
+                           reinterpret_cast<const unsigned char*>(key_sv.data()),
+                           iv) != 1) {
         EVP_CIPHER_CTX_free(cipher_ctx);
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
 
     // Decrypt data
-    if (EVP_DecryptUpdate(cipher_ctx, result->bin_buf, &out_len,
-                         encrypted_data, encrypted_len) != 1) {
+    if (EVP_DecryptUpdate(cipher_ctx, out_ptr, &out_len,
+                          encrypted_data,
+                          static_cast<int>(encrypted_len)) != 1) {
         EVP_CIPHER_CTX_free(cipher_ctx);
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
 
     // Finalize decryption
-    if (EVP_DecryptFinal_ex(cipher_ctx, result->bin_buf + out_len, &final_len) != 1) {
+    if (EVP_DecryptFinal_ex(cipher_ctx, out_ptr + out_len, &final_len) != 1) {
         EVP_CIPHER_CTX_free(cipher_ctx);
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
 
     EVP_CIPHER_CTX_free(cipher_ctx);
-
-    result->type = VEF_RESULT_VALUE;
-    result->actual_len = out_len + final_len;
+    result.set_length(static_cast<size_t>(out_len + final_len));
 }
 
 // gen_salt(type, iter_count) - Generate salt for password hashing
-void gen_salt_impl(vef_context_t* ctx,
-                   vef_invalue_t* type_arg, vef_invalue_t* iter_arg,
-                   vef_vdf_result_t* result) {
-    if (type_arg->is_null) {
-        result->type = VEF_RESULT_NULL;
+void gen_salt_impl(StringArg type_arg, IntArg iter_arg, StringResult result) {
+    if (type_arg.is_null()) {
+        result.set_null();
         return;
     }
 
-    std::string type(type_arg->str_value, type_arg->str_len);
+    std::string type(type_arg.value());
     std::transform(type.begin(), type.end(), type.begin(), ::tolower);
 
     // Default iteration count
     int iter_count = 100000;
-    if (iter_arg && !iter_arg->is_null) {
-        long long val = iter_arg->int_value;
+    if (!iter_arg.is_null()) {
+        long long val = iter_arg.value();
         if (val < 1 || val > 10000000) {
-            result->type = VEF_RESULT_NULL;
+            result.set_null();
             return;
         }
-        iter_count = (int)val;
+        iter_count = static_cast<int>(val);
     }
 
     // Generate 16 random bytes for salt
     unsigned char salt_bytes[16];
     if (RAND_bytes(salt_bytes, 16) != 1) {
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
 
@@ -440,43 +442,38 @@ void gen_salt_impl(vef_context_t* ctx,
     } else if (type == "pbkdf2-sha512" || type == "sha512") {
         output = "$pbkdf2-sha512$" + std::to_string(iter_count) + "$" + salt_b64;
     } else {
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
 
-    memcpy(result->str_buf, output.c_str(), output.length());
-    result->str_buf[output.length()] = '\0';
-    result->type = VEF_RESULT_VALUE;
-    result->actual_len = output.length();
+    result.set(output);
 }
 
 // crypt(password, salt) - Hash password using PBKDF2
-void crypt_impl(vef_context_t* ctx,
-                vef_invalue_t* password_arg, vef_invalue_t* salt_arg,
-                vef_vdf_result_t* result) {
-    if (password_arg->is_null || salt_arg->is_null) {
-        result->type = VEF_RESULT_NULL;
+void crypt_impl(StringArg password_arg, StringArg salt_arg, StringResult result) {
+    if (password_arg.is_null() || salt_arg.is_null()) {
+        result.set_null();
         return;
     }
 
-    std::string password(password_arg->str_value, password_arg->str_len);
-    std::string salt_str(salt_arg->str_value, salt_arg->str_len);
+    std::string password(password_arg.value());
+    std::string salt_str(salt_arg.value());
 
     // Parse salt string format: $algorithm$rounds$salt or $algorithm$rounds$salt$hash
     if (salt_str.empty() || salt_str[0] != '$') {
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
 
     // Find the parts
     size_t pos1 = salt_str.find('$', 1);
     if (pos1 == std::string::npos) {
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
     size_t pos2 = salt_str.find('$', pos1 + 1);
     if (pos2 == std::string::npos) {
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
     size_t pos3 = salt_str.find('$', pos2 + 1);
@@ -493,7 +490,7 @@ void crypt_impl(vef_context_t* ctx,
 
     int rounds = atoi(rounds_str.c_str());
     if (rounds < 1 || rounds > 10000000) {
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
 
@@ -501,7 +498,7 @@ void crypt_impl(vef_context_t* ctx,
     unsigned char salt_bytes[256];
     int salt_len = base64_decode(salt_b64, salt_bytes, sizeof(salt_bytes));
     if (salt_len < 0) {
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
 
@@ -516,16 +513,16 @@ void crypt_impl(vef_context_t* ctx,
         md = EVP_sha512();
         hash_len = 64;
     } else {
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
 
     // Compute PBKDF2
     unsigned char hash[64];
-    if (PKCS5_PBKDF2_HMAC(password.c_str(), password.length(),
+    if (PKCS5_PBKDF2_HMAC(password.c_str(), static_cast<int>(password.length()),
                           salt_bytes, salt_len,
                           rounds, md, hash_len, hash) != 1) {
-        result->type = VEF_RESULT_NULL;
+        result.set_null();
         return;
     }
 
@@ -536,10 +533,7 @@ void crypt_impl(vef_context_t* ctx,
     std::string output = "$" + algorithm + "$" + std::to_string(rounds) +
                         "$" + salt_b64 + "$" + hash_b64;
 
-    memcpy(result->str_buf, output.c_str(), output.length());
-    result->str_buf[output.length()] = '\0';
-    result->type = VEF_RESULT_VALUE;
-    result->actual_len = output.length();
+    result.set(output);
 }
 
 // =============================================================================
@@ -547,10 +541,11 @@ void crypt_impl(vef_context_t* ctx,
 // =============================================================================
 
 VEF_GENERATE_ENTRY_POINTS(
-  make_extension("vsql_crypto", "0.0.1")
+  make_extension()
     // Utility functions
     .func(make_func<&crypto_version_impl>("crypto_version")
       .returns(STRING)
+      .no_params()
       .buffer_size(256)
       .build())
 
@@ -579,6 +574,7 @@ VEF_GENERATE_ENTRY_POINTS(
 
     .func(make_func<&gen_random_uuid_impl>("gen_random_uuid")
       .returns(STRING)
+      .no_params()
       .buffer_size(37)
       .build())
 
