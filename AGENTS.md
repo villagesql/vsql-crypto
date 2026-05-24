@@ -81,65 +81,36 @@ See `AGENTS.local.md` for machine-specific build paths and configurations.
 - Variable naming: lowercase with underscores (e.g., `digest_len`)
 - All cryptographic operations use OpenSSL APIs (EVP, HMAC, RAND)
 
-## VillageSQL Extension Framework (VEF) API Pattern
+## VillageSQL Extension Framework (VEF) API Pattern — Protocol V3
 
-Functions use the VillageSQL Extension Framework API with the following pattern:
+This extension uses the Protocol V3 stable SDK (`<villagesql/vsql.h>`).
 
 ### Function Implementation Pattern
 
 ```cpp
-void my_function_impl(vef_context_t* ctx,
-                      vef_invalue_t* arg1, vef_invalue_t* arg2,
-                      vef_vdf_result_t* result) {
-    // Check for NULL arguments
-    if (arg1->is_null || arg2->is_null) {
-        result->type = IS_NULL;
-        return;
-    }
+#include <villagesql/vsql.h>
+using namespace vsql;
 
-    // Access argument values
-    const char* str_value = arg1->str_value;
-    size_t str_len = arg1->str_len;
-    const unsigned char* bin_value = arg1->bin_value;
-    size_t bin_len = arg1->bin_len;
-    long long int_value = arg1->int_value;
-
-    // Perform function logic
-    // ...
-
-    // Set result
-    result->type = IS_VALUE;  // or IS_NULL or IS_ERROR
-    result->actual_len = result_length;
-    // Write to result->str_buf or result->bin_buf
+void my_function_impl(StringArg arg1, StringArg arg2, StringResult result) {
+    if (arg1.is_null() || arg2.is_null()) { result.set_null(); return; }
+    std::string_view s = arg1.value();
+    // write to result.buffer(), then call result.set_length(n)
 }
 ```
+
+Typed argument wrappers: `StringArg`, `IntArg`, `RealArg`. Result wrappers: `StringResult`, `IntResult`, `RealResult`. Use `result.set_null()` for NULL, `result.warning("msg")` for soft errors (Warning 3200 + NULL return), `result.error("msg")` for hard errors (ERROR 3200).
 
 ### Function Registration Pattern
 
 ```cpp
-#include <villagesql/extension.h>
-
-using namespace villagesql::extension_builder;
-using namespace villagesql::func_builder;
-using namespace villagesql::type_builder;
-
 VEF_GENERATE_ENTRY_POINTS(
-  make_extension("extension_name", "1.0.0")
+  make_extension()
     .func(make_func<&my_function_impl>("my_function")
-      .returns(STRING)  // or INT, etc.
-      .param(STRING)    // add .param() for each parameter
-      .param(INT)
-      .buffer_size(1024)  // max result size
-      .build())
+      .returns(STRING).param(STRING).param(INT).buffer_size(1024).build())
 )
 ```
 
-### Key Differences from Old MySQL UDF API:
-- No separate init/main/deinit functions - single implementation function
-- Arguments passed as `vef_invalue_t*` structs with `is_null`, `str_value`, `bin_value`, `int_value` fields
-- Results set via `vef_vdf_result_t*` with `type`, `str_buf`, `bin_buf`, `actual_len` fields
-- Function registration done declaratively in code using builder pattern
-- No install.sql needed - functions registered at extension load time
+Extension name and version come from `manifest.json`; `make_extension()` takes no arguments in V3.
 
 ## Testing
 
