@@ -48,8 +48,9 @@ SELECT encrypt('data', NULL, 'aes') IS NULL;
 --echo # Test encrypt with NULL algorithm
 SELECT encrypt('data', 'key', NULL) IS NULL;
 
---echo # Test encrypt with empty key (returns NULL for security)
-SELECT encrypt('data', '', 'aes') IS NULL;
+--echo # Test encrypt with empty key (errors: key too short)
+--error ER_UDF_ERROR
+SELECT encrypt('data', '', 'aes');
 
 --echo # Test decrypt with invalid algorithm (returns NULL)
 SELECT decrypt('data', 'key', 'invalid-algo') IS NULL;
@@ -88,17 +89,18 @@ SELECT gen_random_bytes(1073741824) IS NULL;
 --echo # Test gen_random_bytes with NULL
 SELECT gen_random_bytes(NULL) IS NULL;
 
---echo # Test decrypt of data encrypted with different algorithm
+--echo # Test decrypt with mismatched algorithm (errors: key too short for aes-256)
 SET @data = 'test data';
 SET @key = 'sixteen-byte-key';
 SET @enc_aes = encrypt(@data, @key, 'aes');
-SELECT decrypt(@enc_aes, @key, 'aes-256') = @data;
+--error ER_UDF_ERROR
+SELECT decrypt(@enc_aes, @key, 'aes-256');
 
---echo # Test AES-256 requires longer key
+--echo # Test AES-256 requires longer key (errors: key too short)
 SET @short_key = 'short';
 SET @data = 'test';
-SET @enc = encrypt(@data, @short_key, 'aes-256');
-SELECT @enc IS NOT NULL;
+--error ER_UDF_ERROR
+SELECT encrypt(@data, @short_key, 'aes-256');
 
 --echo # Test case sensitivity of algorithm names
 SELECT HEX(digest('test', 'SHA256')) = HEX(digest('test', 'sha256'));
