@@ -45,7 +45,7 @@ SELECT decrypt(@encrypted, @key, 'aes') = @plaintext;
 
 # Test encrypt/decrypt with different data
 SET @data = 'The quick brown fox jumps over the lazy dog';
-SET @key256 = 'this-is-a-32-byte-key-for-aes';
+SET @key256 = 'this-is-a-32-byte-key-for-aes256';
 SET @enc = encrypt(@data, @key256, 'aes-256');
 SELECT decrypt(@enc, @key256, 'aes-256') = @data;
 

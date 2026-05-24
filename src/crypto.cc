@@ -261,6 +261,10 @@ void encrypt_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
 
   auto key_sv = key_arg.value();
 
+  // TODO(villagesql): Cipher selection uses key_sv.size() as an OR override,
+  // meaning a 16-byte key with algorithm "aes-256" silently selects AES-128
+  // instead of returning an error. The || key_sv.size() == N conditions should
+  // be removed; cipher should be determined solely by the algorithm name.
   const EVP_CIPHER *cipher = nullptr;
   if (cipher_str.find("aes") != std::string::npos) {
     if (cipher_str.find("128") != std::string::npos || key_sv.size() == 16) {
@@ -303,6 +307,10 @@ void encrypt_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
   auto data_sv = data_arg.value();
   int out_len = 0, final_len = 0;
 
+  // TODO(villagesql): Validate that key_sv.size() matches the required key
+  // length for the selected cipher before passing to OpenSSL. EVP_EncryptInit_ex
+  // reads exactly N bytes from key_sv.data() regardless of buffer length,
+  // causing undefined behavior when key_sv is shorter than required.
   // Initialize encryption
   if (EVP_EncryptInit_ex(cipher_ctx, cipher, nullptr,
                          reinterpret_cast<const unsigned char *>(key_sv.data()),
@@ -348,6 +356,9 @@ void decrypt_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
 
   auto key_sv = key_arg.value();
 
+  // TODO(villagesql): Same broken cipher selection as encrypt_impl — key
+  // length acts as an OR override of the algorithm name. Remove the
+  // || key_sv.size() == N conditions and select cipher solely by algorithm.
   const EVP_CIPHER *cipher = nullptr;
   if (cipher_str.find("aes") != std::string::npos) {
     if (cipher_str.find("128") != std::string::npos || key_sv.size() == 16) {
@@ -390,6 +401,8 @@ void decrypt_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
   auto *out_ptr = reinterpret_cast<unsigned char *>(buf.data());
   int out_len = 0, final_len = 0;
 
+  // TODO(villagesql): Validate key_sv.size() against the cipher's required key
+  // length before calling EVP_DecryptInit_ex. Same UB risk as encrypt_impl.
   // Initialize decryption
   if (EVP_DecryptInit_ex(cipher_ctx, cipher, nullptr,
                          reinterpret_cast<const unsigned char *>(key_sv.data()),
