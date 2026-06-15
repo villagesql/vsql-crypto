@@ -75,9 +75,9 @@ SET @data = 'Hello, World!';
 SET @key1 = 'correct-key-16!!';
 SET @key2 = 'wrong-key-16!!!!';
 SET @enc = encrypt(@data, @key1, 'aes');
-SELECT decrypt(@enc, @key2, 'aes') = @data;
-decrypt(@enc, @key2, 'aes') = @data
-NULL
+SELECT decrypt(@enc, @key2, 'aes') <=> @data;
+decrypt(@enc, @key2, 'aes') <=> @data
+0
 # Test decrypt with corrupted data
 SELECT decrypt('corrupted-data', 'key', 'aes') IS NULL;
 decrypt('corrupted-data', 'key', 'aes') IS NULL
