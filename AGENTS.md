@@ -167,7 +167,7 @@ VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
 After building the extension, install it in VillageSQL:
 
 ```sql
-INSTALL EXTENSION 'vsql_crypto';
+INSTALL EXTENSION vsql_crypto;
 ```
 
 Then test the functions:
