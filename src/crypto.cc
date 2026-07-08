@@ -571,6 +571,7 @@ VEF_GENERATE_ENTRY_POINTS(
                   .returns(STRING)
                   .no_params()
                   .buffer_size(256)
+                  .deterministic()
                   .build())
 
         // Hash functions
@@ -579,6 +580,7 @@ VEF_GENERATE_ENTRY_POINTS(
                   .param(STRING)
                   .param(STRING)
                   .buffer_size(64)
+                  .deterministic()
                   .build())
 
         .func(make_func<&hmac_impl>("hmac")
@@ -587,6 +589,7 @@ VEF_GENERATE_ENTRY_POINTS(
                   .param(STRING)
                   .param(STRING)
                   .buffer_size(64)
+                  .deterministic()
                   .build())
 
         // Random data generation
@@ -617,6 +620,7 @@ VEF_GENERATE_ENTRY_POINTS(
                   .param(STRING)
                   .param(STRING)
                   .buffer_size(8192)
+                  .deterministic()
                   .build())
 
         // Password hashing
@@ -632,4 +636,5 @@ VEF_GENERATE_ENTRY_POINTS(
                   .param(STRING)
                   .param(STRING)
                   .buffer_size(512)
+                  .deterministic()
                   .build()))
