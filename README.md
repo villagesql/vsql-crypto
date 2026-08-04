@@ -137,6 +137,27 @@ SELECT decrypt(@encrypted, @key, 'aes');
 -- Returns: Hello, World!
 ```
 
+##### Maximum input size
+
+`encrypt()` and `decrypt()` write into a fixed 65,536-byte result buffer. Before
+doing any work they check that the output will fit: the IV plus the input plus one
+cipher block must not exceed the buffer. Every supported cipher is AES-CBC, with a
+16-byte IV and a 16-byte block, so `encrypt()` accepts at most 65,504 bytes of input.
+
+Input that does not fit is rejected rather than truncated. The function returns NULL
+and raises a warning; the statement itself still succeeds.
+
+```sql
+SET @k = 'my-32-byte-key-for-aes-256!!!!!!';
+SELECT encrypt(REPEAT('a', 65505), @k, 'aes-256') IS NULL;
+-- 1
+SHOW WARNINGS;
+-- Warning | 3200 | VDF error in function 'encrypt': encrypt: input too large for result buffer
+```
+
+`decrypt()` applies the same buffer rule and reports
+`decrypt: input too large for result buffer`.
+
 #### Random Data Generation
 
 **gen_random_bytes(count)** - Generate cryptographically secure random bytes
@@ -189,6 +210,30 @@ The `crypt()` function returns a formatted hash string that includes the algorit
 ```
 $pbkdf2-sha256$100000$<base64-salt>$<base64-hash>
 ```
+
+#### Determinism
+
+VillageSQL only allows deterministic functions in generated columns and CHECK
+constraints. Declared deterministic: `crypto_version()`, `digest()`, `hmac()`,
+`decrypt()`, `crypt()`.
+
+Not deterministic, and rejected in both: `encrypt()` (fresh random IV per call),
+`gen_random_bytes()`, `gen_random_uuid()`, and `gen_salt()`.
+
+The asymmetry between `encrypt()` and `decrypt()` is deliberate — `decrypt()` is a
+pure function of its arguments because the IV travels in the ciphertext:
+
+```sql
+CREATE TABLE secrets (
+  plain  VARBINARY(255),
+  cipher VARBINARY(600) AS (encrypt(plain, 'my-16-byte-key!!', 'aes')) STORED
+);
+-- ERROR 3763 (HY000): Expression of generated column 'cipher' contains a
+-- disallowed function: encrypt.
+```
+
+Encrypt in the `INSERT` or `UPDATE` statement instead, storing the result in an
+ordinary column.
 
 ## Testing
 
