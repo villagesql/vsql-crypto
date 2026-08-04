@@ -67,6 +67,19 @@ SET @key192 = 'twentyfour-byte-key-here!';
 SET @enc192 = encrypt(@data192, @key192, 'aes-192');
 SELECT decrypt(@enc192, @key192, 'aes-192') = @data192;
 
+# Large-payload encrypt/decrypt: the result buffer is bounds-checked so
+# oversized input is rejected (NULL) instead of overflowing the heap.
+SET @kbig = REPEAT('K', 32);
+# 10KB exceeds the former 8192-byte buffer; must round-trip cleanly now.
+SET @d10k = REPEAT('a', 10000);
+SELECT decrypt(encrypt(@d10k, @kbig, 'aes-256'), @kbig, 'aes-256') = @d10k AS roundtrip_10k;
+# 60KB fits within the buffer.
+SET @d60k = REPEAT('b', 60000);
+SELECT decrypt(encrypt(@d60k, @kbig, 'aes-256'), @kbig, 'aes-256') = @d60k AS roundtrip_60k;
+# Oversized input returns NULL (guarded), not a heap overflow.
+SET @d70k = REPEAT('c', 70000);
+SELECT encrypt(@d70k, @kbig, 'aes-256') IS NULL AS oversized_null;
+
 # Test password hashing with gen_salt and crypt
 # Test PBKDF2-SHA256
 SET @salt256 = gen_salt('pbkdf2-sha256', 10000);

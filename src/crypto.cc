@@ -302,6 +302,20 @@ void encrypt_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
   auto buf = result.buffer();
   auto *out_ptr = reinterpret_cast<unsigned char *>(buf.data());
 
+  // Guard the fixed result buffer against overflow. CBC output is
+  // IV + ciphertext, and ciphertext can reach data_len + one padding
+  // block; writing past buf would corrupt the heap, so reject oversized
+  // input with a warning (NULL) rather than overrun.
+  {
+    size_t need = static_cast<size_t>(iv_len) + data_arg.value().size() +
+                  static_cast<size_t>(EVP_CIPHER_block_size(cipher));
+    if (need > buf.size()) {
+      EVP_CIPHER_CTX_free(cipher_ctx);
+      result.warning("encrypt: input too large for result buffer");
+      return;
+    }
+  }
+
   // Copy IV to output buffer
   memcpy(out_ptr, iv, iv_len);
 
@@ -399,6 +413,18 @@ void decrypt_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
   auto buf = result.buffer();
   auto *out_ptr = reinterpret_cast<unsigned char *>(buf.data());
   int out_len = 0, final_len = 0;
+
+  // Guard the fixed result buffer against overflow (see encrypt_impl):
+  // plaintext output can reach encrypted_len + one cipher block.
+  {
+    size_t need =
+        encrypted_len + static_cast<size_t>(EVP_CIPHER_block_size(cipher));
+    if (need > buf.size()) {
+      EVP_CIPHER_CTX_free(cipher_ctx);
+      result.warning("decrypt: input too large for result buffer");
+      return;
+    }
+  }
 
   // Initialize decryption
   if (EVP_DecryptInit_ex(cipher_ctx, cipher, nullptr,
@@ -571,6 +597,7 @@ VEF_GENERATE_ENTRY_POINTS(
                   .returns(STRING)
                   .no_params()
                   .buffer_size(256)
+                  .deterministic()
                   .build())
 
         // Hash functions
@@ -579,6 +606,7 @@ VEF_GENERATE_ENTRY_POINTS(
                   .param(STRING)
                   .param(STRING)
                   .buffer_size(64)
+                  .deterministic()
                   .build())
 
         .func(make_func<&hmac_impl>("hmac")
@@ -587,6 +615,7 @@ VEF_GENERATE_ENTRY_POINTS(
                   .param(STRING)
                   .param(STRING)
                   .buffer_size(64)
+                  .deterministic()
                   .build())
 
         // Random data generation
@@ -608,7 +637,7 @@ VEF_GENERATE_ENTRY_POINTS(
                   .param(STRING)
                   .param(STRING)
                   .param(STRING)
-                  .buffer_size(8192)
+                  .buffer_size(65535)
                   .build())
 
         .func(make_func<&decrypt_impl>("decrypt")
@@ -616,7 +645,8 @@ VEF_GENERATE_ENTRY_POINTS(
                   .param(STRING)
                   .param(STRING)
                   .param(STRING)
-                  .buffer_size(8192)
+                  .buffer_size(65535)
+                  .deterministic()
                   .build())
 
         // Password hashing
@@ -632,4 +662,5 @@ VEF_GENERATE_ENTRY_POINTS(
                   .param(STRING)
                   .param(STRING)
                   .buffer_size(512)
+                  .deterministic()
                   .build()))
