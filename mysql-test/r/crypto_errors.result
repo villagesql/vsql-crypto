@@ -39,6 +39,14 @@ LENGTH(hmac('data', '', 'sha256')) > 0
 SELECT encrypt('data', 'key', 'invalid-algo') IS NULL;
 encrypt('data', 'key', 'invalid-algo') IS NULL
 1
+# Test encrypt with a lookalike cipher name (exact-match list, returns NULL)
+SELECT encrypt('data', 'sixteen-byte-key', 'aes-999') IS NULL;
+encrypt('data', 'sixteen-byte-key', 'aes-999') IS NULL
+1
+# Test encrypt cipher name is case-insensitive
+SELECT decrypt(encrypt('data', 'sixteen-byte-key', 'AES-128'), 'sixteen-byte-key', 'aes') = 'data';
+decrypt(encrypt('data', 'sixteen-byte-key', 'AES-128'), 'sixteen-byte-key', 'aes') = 'data'
+1
 # Test encrypt with NULL data
 SELECT encrypt(NULL, 'key', 'aes') IS NULL;
 encrypt(NULL, 'key', 'aes') IS NULL
@@ -57,6 +65,10 @@ ERROR HY000: VDF error in function 'encrypt': key too short for aes: need 16 byt
 # Test decrypt with invalid algorithm (returns NULL)
 SELECT decrypt('data', 'key', 'invalid-algo') IS NULL;
 decrypt('data', 'key', 'invalid-algo') IS NULL
+1
+# Test decrypt with a lookalike cipher name (returns NULL)
+SELECT decrypt('data', 'sixteen-byte-key', 'aes-999') IS NULL;
+decrypt('data', 'sixteen-byte-key', 'aes-999') IS NULL
 1
 # Test decrypt with NULL data
 SELECT decrypt(NULL, 'key', 'aes') IS NULL;

@@ -1,7 +1,7 @@
 # Test error handling for cryptographic functions
 
 # Setup: Copy VEB to veb_dir if VSQL_CRYPTO_VEB is set, then install extension
---let $veb_dest = `SELECT CONCAT(@@veb_dir, '/veb')`
+--let $veb_dest = `SELECT CONCAT(@@veb_dir, '/vsql_crypto.veb')`
 if ($VSQL_CRYPTO_VEB) {
   --error 0,1
   --remove_file $veb_dest
@@ -39,6 +39,12 @@ SELECT LENGTH(hmac('data', '', 'sha256')) > 0;
 --echo # Test encrypt with invalid algorithm (returns NULL)
 SELECT encrypt('data', 'key', 'invalid-algo') IS NULL;
 
+--echo # Test encrypt with a lookalike cipher name (exact-match list, returns NULL)
+SELECT encrypt('data', 'sixteen-byte-key', 'aes-999') IS NULL;
+
+--echo # Test encrypt cipher name is case-insensitive
+SELECT decrypt(encrypt('data', 'sixteen-byte-key', 'AES-128'), 'sixteen-byte-key', 'aes') = 'data';
+
 --echo # Test encrypt with NULL data
 SELECT encrypt(NULL, 'key', 'aes') IS NULL;
 
@@ -54,6 +60,9 @@ SELECT encrypt('data', '', 'aes');
 
 --echo # Test decrypt with invalid algorithm (returns NULL)
 SELECT decrypt('data', 'key', 'invalid-algo') IS NULL;
+
+--echo # Test decrypt with a lookalike cipher name (returns NULL)
+SELECT decrypt('data', 'sixteen-byte-key', 'aes-999') IS NULL;
 
 --echo # Test decrypt with NULL data
 SELECT decrypt(NULL, 'key', 'aes') IS NULL;
