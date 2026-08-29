@@ -1,7 +1,7 @@
 # Test basic cryptographic functions
 
 # Setup: Copy VEB to veb_dir if VSQL_CRYPTO_VEB is set, then install extension
---let $veb_dest = `SELECT CONCAT(@@veb_dir, '/veb')`
+--let $veb_dest = `SELECT CONCAT(@@veb_dir, '/vsql_crypto.veb')`
 if ($VSQL_CRYPTO_VEB) {
   --error 0,1
   --remove_file $veb_dest

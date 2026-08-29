@@ -50,6 +50,19 @@ static const EVP_MD *get_digest_algorithm(std::string_view algo_sv) {
   return nullptr;
 }
 
+// Cipher lookup for encrypt()/decrypt(). Exact names only: a lookalike such
+// as "aes-999" must return nullptr rather than silently select a key size.
+static const EVP_CIPHER *get_cipher_algorithm(const std::string &alg) {
+  if (alg == "aes" || alg == "aes-128")
+    return EVP_aes_128_cbc();
+  if (alg == "aes-192")
+    return EVP_aes_192_cbc();
+  if (alg == "aes-256")
+    return EVP_aes_256_cbc();
+
+  return nullptr;
+}
+
 // Base64 encoding for password hashing
 static const char base64_chars[] =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -261,16 +274,8 @@ void encrypt_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
 
   auto key_sv = key_arg.value();
 
-  const EVP_CIPHER *cipher = nullptr;
-  if (cipher_str.find("aes") != std::string::npos) {
-    if (cipher_str.find("256") != std::string::npos) {
-      cipher = EVP_aes_256_cbc();
-    } else if (cipher_str.find("192") != std::string::npos) {
-      cipher = EVP_aes_192_cbc();
-    } else {
-      cipher = EVP_aes_128_cbc(); // Default: aes or aes-128
-    }
-  } else {
+  const EVP_CIPHER *cipher = get_cipher_algorithm(cipher_str);
+  if (!cipher) {
     result.set_null();
     return;
   }
@@ -367,16 +372,8 @@ void decrypt_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
 
   auto key_sv = key_arg.value();
 
-  const EVP_CIPHER *cipher = nullptr;
-  if (cipher_str.find("aes") != std::string::npos) {
-    if (cipher_str.find("256") != std::string::npos) {
-      cipher = EVP_aes_256_cbc();
-    } else if (cipher_str.find("192") != std::string::npos) {
-      cipher = EVP_aes_192_cbc();
-    } else {
-      cipher = EVP_aes_128_cbc(); // Default: aes or aes-128
-    }
-  } else {
+  const EVP_CIPHER *cipher = get_cipher_algorithm(cipher_str);
+  if (!cipher) {
     result.set_null();
     return;
   }
