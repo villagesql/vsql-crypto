@@ -66,8 +66,9 @@ See `AGENTS.local.md` for machine-specific build paths and configurations.
 - `gen_random_uuid()` - Generate random UUID v4
 
 **Error Handling:**
-- Functions return NULL for invalid inputs (unsupported algorithms, NULL arguments, corrupted data)
-- Functions set result->type to IS_NULL for errors
+- `digest()`, `hmac()`, `gen_salt()`, `crypt()`, and `gen_random_bytes()` return NULL for invalid inputs (unsupported algorithms, NULL arguments, out-of-range counts)
+- `encrypt()` and `decrypt()` return NULL for NULL arguments, an unrecognized cipher name, or corrupted/truncated ciphertext, but raise a hard SQL error (ERROR 3200, via `result.error()`) for a key shorter than the cipher requires
+- Oversized `encrypt()` input raises a warning and returns NULL (`result.warning()`)
 - This behavior is validated in the `crypto_errors.test` test suite
 
 **Dependencies:**
@@ -160,7 +161,7 @@ VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
 
 - Tests should validate function output and behavior
 - Each test should install the extension, run tests, and clean up (uninstall extension)
-- **Error Handling**: Functions return NULL for errors (result->type = IS_NULL)
+- **Error Handling**: most functions return NULL for bad input; `encrypt()`/`decrypt()` raise ERROR 3200 for a too-short key (see Error Handling above)
 
 ## Extension Installation
 
@@ -182,10 +183,10 @@ SELECT HEX(hmac('data', 'key', 'sha256'));
 To add new cryptographic functions to this extension:
 
 1. **Implement the VDF in `src/crypto.cc`**:
-   - Add the implementation function with signature: `void func_impl(vef_context_t*, vef_invalue_t*..., vef_vdf_result_t*)`
+   - Add the implementation function using the Protocol V3 typed wrappers, e.g. `void func_impl(StringArg data, StringResult result)`; match the existing functions in `crypto.cc`
    - Use OpenSSL APIs for cryptographic operations
-   - Check for NULL arguments and set `result->type = IS_NULL` on error
-   - Set `result->type = IS_VALUE` and populate `result->str_buf` or `result->bin_buf` on success
+   - Check for NULL arguments with `arg.is_null()` and call `result.set_null()` on invalid input; use `result.warning()` for a soft error (warning plus NULL result) and `result.error()` only when continuing is unsafe
+   - On success, write the value with `result.set(...)`, or fill `result.buffer()` and call `result.set_length()`
    - Include copyright header if creating new files
 
 2. **Register the function in the extension**:
