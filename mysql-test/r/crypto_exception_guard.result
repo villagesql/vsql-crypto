@@ -1,0 +1,116 @@
+INSTALL EXTENSION vsql_crypto;
+# -- Normal values: one representative call per entry point --
+# crypto_version
+SELECT LENGTH(crypto_version()) > 0;
+LENGTH(crypto_version()) > 0
+1
+# digest
+SELECT HEX(digest('test', 'sha256'));
+HEX(digest('test', 'sha256'))
+9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08
+# hmac
+SELECT HEX(hmac('data', 'key', 'sha256'));
+HEX(hmac('data', 'key', 'sha256'))
+5031FE3D989C6D1537A013FA6E739DA23463FDAEC3B70137D828E36ACE221BD0
+# gen_random_bytes
+SELECT LENGTH(gen_random_bytes(16));
+LENGTH(gen_random_bytes(16))
+16
+# gen_random_uuid
+SELECT LENGTH(gen_random_uuid());
+LENGTH(gen_random_uuid())
+36
+# encrypt / decrypt round trip
+SET @data = 'Hello, World!';
+SET @key = 'sixteen-byte-key';
+SET @enc = encrypt(@data, @key, 'aes');
+SELECT decrypt(@enc, @key, 'aes') = @data;
+decrypt(@enc, @key, 'aes') = @data
+1
+# gen_salt
+SET @salt = gen_salt('pbkdf2-sha256', 1000);
+SELECT @salt LIKE '$pbkdf2-sha256$1000$%';
+@salt LIKE '$pbkdf2-sha256$1000$%'
+1
+# crypt
+SET @hash = crypt('mypassword', @salt);
+SELECT @hash LIKE '$pbkdf2-sha256$1000$%$%';
+@hash LIKE '$pbkdf2-sha256$1000$%$%'
+1
+# -- NULL arguments: one per entry point that takes arguments --
+SELECT digest(NULL, 'sha256') IS NULL;
+digest(NULL, 'sha256') IS NULL
+1
+SELECT digest('test', NULL) IS NULL;
+digest('test', NULL) IS NULL
+1
+SELECT hmac(NULL, 'key', 'sha256') IS NULL;
+hmac(NULL, 'key', 'sha256') IS NULL
+1
+SELECT hmac('data', NULL, 'sha256') IS NULL;
+hmac('data', NULL, 'sha256') IS NULL
+1
+SELECT hmac('data', 'key', NULL) IS NULL;
+hmac('data', 'key', NULL) IS NULL
+1
+SELECT gen_random_bytes(NULL) IS NULL;
+gen_random_bytes(NULL) IS NULL
+1
+SELECT encrypt(NULL, 'key', 'aes') IS NULL;
+encrypt(NULL, 'key', 'aes') IS NULL
+1
+SELECT encrypt('data', NULL, 'aes') IS NULL;
+encrypt('data', NULL, 'aes') IS NULL
+1
+SELECT encrypt('data', 'key', NULL) IS NULL;
+encrypt('data', 'key', NULL) IS NULL
+1
+SELECT decrypt(NULL, 'key', 'aes') IS NULL;
+decrypt(NULL, 'key', 'aes') IS NULL
+1
+SELECT decrypt('data', NULL, 'aes') IS NULL;
+decrypt('data', NULL, 'aes') IS NULL
+1
+SELECT decrypt('data', 'key', NULL) IS NULL;
+decrypt('data', 'key', NULL) IS NULL
+1
+SELECT gen_salt(NULL, 100) IS NULL;
+gen_salt(NULL, 100) IS NULL
+1
+SELECT crypt(NULL, '$pbkdf2-sha256$10000$abc') IS NULL;
+crypt(NULL, '$pbkdf2-sha256$10000$abc') IS NULL
+1
+SELECT crypt('password', NULL) IS NULL;
+crypt('password', NULL) IS NULL
+1
+# -- Invalid digest algorithm reaches get_digest_algorithm via both --
+# -- digest() and hmac(), each through its own wrapper --
+SELECT digest('test', 'invalid-algo') IS NULL;
+digest('test', 'invalid-algo') IS NULL
+1
+SELECT hmac('data', 'key', 'invalid-algo') IS NULL;
+hmac('data', 'key', 'invalid-algo') IS NULL
+1
+# -- Malformed salt passed to crypt(): each shape exercises a --
+# -- different early return in crypt_body, all through crypt_impl --
+# no leading '$'
+SELECT crypt('password', 'invalid-salt') IS NULL;
+crypt('password', 'invalid-salt') IS NULL
+1
+# missing rounds/salt fields
+SELECT crypt('password', '$pbkdf2-sha256$10000') IS NULL;
+crypt('password', '$pbkdf2-sha256$10000') IS NULL
+1
+# unknown algorithm tag
+SELECT crypt('password', '$invalid-algo$10000$abc') IS NULL;
+crypt('password', '$invalid-algo$10000$abc') IS NULL
+1
+# non-numeric rounds
+SELECT crypt('password', '$pbkdf2-sha256$notanumber$abc') IS NULL;
+crypt('password', '$pbkdf2-sha256$notanumber$abc') IS NULL
+1
+# salt segment is not valid base64
+SELECT crypt('password', '$pbkdf2-sha256$1000$not!!valid==base64') IS NULL;
+crypt('password', '$pbkdf2-sha256$1000$not!!valid==base64') IS NULL
+1
+UNINSTALL EXTENSION vsql_crypto;
