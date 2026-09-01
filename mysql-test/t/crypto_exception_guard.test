@@ -1,0 +1,92 @@
+# Every registered VDF entry point is now a thin try/catch wrapper around
+# an unchanged "_body" function (see src/crypto.cc). This test does not try
+# to force a real exception -- MTR has no supported way to make std::string
+# or base64_encode throw bad_alloc -- its job is only to prove that ordinary
+# behavior is unchanged by the wrapping: normal values, NULL arguments, an
+# invalid digest algorithm, and a malformed crypt() salt should all still
+# produce exactly what they produced before the guard was added.
+
+# Setup: Copy VEB to veb_dir if VSQL_CRYPTO_VEB is set, then install extension
+--let $veb_dest = `SELECT CONCAT(@@veb_dir, '/vsql_crypto.veb')`
+if ($VSQL_CRYPTO_VEB) {
+  --error 0,1
+  --remove_file $veb_dest
+  --copy_file $VSQL_CRYPTO_VEB $veb_dest
+}
+INSTALL EXTENSION vsql_crypto;
+
+--echo # -- Normal values: one representative call per entry point --
+
+--echo # crypto_version
+SELECT LENGTH(crypto_version()) > 0;
+
+--echo # digest
+SELECT HEX(digest('test', 'sha256'));
+
+--echo # hmac
+SELECT HEX(hmac('data', 'key', 'sha256'));
+
+--echo # gen_random_bytes
+SELECT LENGTH(gen_random_bytes(16));
+
+--echo # gen_random_uuid
+SELECT LENGTH(gen_random_uuid());
+
+--echo # encrypt / decrypt round trip
+SET @data = 'Hello, World!';
+SET @key = 'sixteen-byte-key';
+SET @enc = encrypt(@data, @key, 'aes');
+SELECT decrypt(@enc, @key, 'aes') = @data;
+
+--echo # gen_salt
+SET @salt = gen_salt('pbkdf2-sha256', 1000);
+SELECT @salt LIKE '$pbkdf2-sha256$1000$%';
+
+--echo # crypt
+SET @hash = crypt('mypassword', @salt);
+SELECT @hash LIKE '$pbkdf2-sha256$1000$%$%';
+
+--echo # -- NULL arguments: one per entry point that takes arguments --
+
+SELECT digest(NULL, 'sha256') IS NULL;
+SELECT digest('test', NULL) IS NULL;
+SELECT hmac(NULL, 'key', 'sha256') IS NULL;
+SELECT hmac('data', NULL, 'sha256') IS NULL;
+SELECT hmac('data', 'key', NULL) IS NULL;
+SELECT gen_random_bytes(NULL) IS NULL;
+SELECT encrypt(NULL, 'key', 'aes') IS NULL;
+SELECT encrypt('data', NULL, 'aes') IS NULL;
+SELECT encrypt('data', 'key', NULL) IS NULL;
+SELECT decrypt(NULL, 'key', 'aes') IS NULL;
+SELECT decrypt('data', NULL, 'aes') IS NULL;
+SELECT decrypt('data', 'key', NULL) IS NULL;
+SELECT gen_salt(NULL, 100) IS NULL;
+SELECT crypt(NULL, '$pbkdf2-sha256$10000$abc') IS NULL;
+SELECT crypt('password', NULL) IS NULL;
+
+--echo # -- Invalid digest algorithm reaches get_digest_algorithm via both --
+--echo # -- digest() and hmac(), each through its own wrapper --
+
+SELECT digest('test', 'invalid-algo') IS NULL;
+SELECT hmac('data', 'key', 'invalid-algo') IS NULL;
+
+--echo # -- Malformed salt passed to crypt(): each shape exercises a --
+--echo # -- different early return in crypt_body, all through crypt_impl --
+
+--echo # no leading '$'
+SELECT crypt('password', 'invalid-salt') IS NULL;
+
+--echo # missing rounds/salt fields
+SELECT crypt('password', '$pbkdf2-sha256$10000') IS NULL;
+
+--echo # unknown algorithm tag
+SELECT crypt('password', '$invalid-algo$10000$abc') IS NULL;
+
+--echo # non-numeric rounds
+SELECT crypt('password', '$pbkdf2-sha256$notanumber$abc') IS NULL;
+
+--echo # salt segment is not valid base64
+SELECT crypt('password', '$pbkdf2-sha256$1000$not!!valid==base64') IS NULL;
+
+# Cleanup
+UNINSTALL EXTENSION vsql_crypto;
