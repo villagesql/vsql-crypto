@@ -13,6 +13,142 @@ A comprehensive cryptographic extension for VillageSQL Server providing secure h
 - **Cryptographic RNG**: Secure random byte generation and UUID v4 generation using OpenSSL
 - **High Performance**: Optimized C++ implementation with OpenSSL backend
 
+## Quick start
+
+Four examples, end to end: storing a password, signing and verifying a payload,
+encrypting a column, and generating an identifier that cannot be guessed.
+[Available Functions](#available-functions) is the per-function reference for
+everything they use.
+
+Prerequisites: the extension installed, which on any packaged VillageSQL is one
+statement. If you installed with the install script, the Docker image, or a
+release tarball, `vsql_crypto.veb` is already in the server's `veb_dir`
+directory (`SHOW VARIABLES LIKE 'veb_dir'` shows where that is). vsql-crypto
+declares no preview capabilities, so no server flag and no restart are needed.
+On a bare source build, build the VEB and copy it into `veb_dir` first (see
+[Installation](#installation)).
+
+```sql
+INSTALL EXTENSION vsql_crypto;
+SELECT crypto_version();
+```
+
+### Store a password
+
+`gen_salt` produces a random salt and records the iteration count with it, and
+`crypt` runs the password through PBKDF2. Verification recomputes the hash using
+the stored value as the salt, so checking a login is one comparison:
+
+```sql
+CREATE TABLE users (email VARCHAR(255) PRIMARY KEY, pw_hash VARCHAR(255) NOT NULL);
+
+INSERT INTO users
+  VALUES ('dana@myco.example',
+          crypt('correct horse battery', gen_salt('pbkdf2-sha256', 100000)));
+
+SELECT crypt('correct horse battery', pw_hash) = pw_hash AS login_ok
+  FROM users WHERE email = 'dana@myco.example';
++----------+
+| login_ok |
++----------+
+|        1 |
++----------+
+```
+
+The stored string carries the algorithm and the iteration count in front of the
+salt and the hash, so raising the count for new passwords leaves existing rows
+verifying at the count they were written with:
+
+```
+$pbkdf2-sha256$100000$wxu24gc1Lg24l6WO0sQFYQ$j2DMnv+jgqZxTp+GMbhp+m/PeuO2T0iUNQKj9p99lzw
+```
+
+`gen_salt` supports the PBKDF2 family only (`pbkdf2-sha256` and
+`pbkdf2-sha512`, plus the aliases in [Password Hashing Functions](#password-hashing-functions)).
+pgcrypto's `bf`, `md5`, and `des` return NULL, so bcrypt hashes from PostgreSQL
+do not carry over; re-hash each user at their next successful login.
+
+### Sign and verify a payload
+
+`hmac` signs a payload with a shared secret. The receiver recomputes the
+signature over the bytes it received and compares, which proves both that the
+sender holds the secret and that the payload arrived unaltered:
+
+```sql
+SET @payload = '{"order":4711,"total":"29.99"}';
+SET @secret  = 'shared-secret';
+SET @sig     = HEX(hmac(@payload, @secret, 'sha256'));
+
+SELECT @sig = HEX(hmac(@payload, @secret, 'sha256')) AS signature_ok,
+       @sig = HEX(hmac('{"order":4711,"total":"29.98"}', @secret, 'sha256')) AS tampered_ok;
++--------------+-------------+
+| signature_ok | tampered_ok |
++--------------+-------------+
+|            1 |           0 |
++--------------+-------------+
+```
+
+`hmac` returns raw bytes; `HEX()` puts them in the form a header carries. For a
+hash with no secret involved, use `digest`.
+
+### Encrypt a column
+
+`encrypt` draws a fresh random IV per call and writes it into the front of the
+ciphertext, so two rows holding the same value do not match each other, and
+`decrypt` needs only the stored bytes, the key, and the cipher name. Ciphertext
+is binary, so the column is `VARBINARY` or `BLOB`:
+
+```sql
+CREATE TABLE cards (id INT PRIMARY KEY, pan VARBINARY(255) NOT NULL);
+
+INSERT INTO cards VALUES
+  (1, encrypt('4111111111111111', 'my-secret-key-16', 'aes')),
+  (2, encrypt('4111111111111111', 'my-secret-key-16', 'aes'));
+
+SELECT COUNT(DISTINCT pan) AS distinct_ciphertexts FROM cards;
++----------------------+
+| distinct_ciphertexts |
++----------------------+
+|                    2 |
++----------------------+
+
+SELECT id, CAST(decrypt(pan, 'my-secret-key-16', 'aes') AS CHAR) AS pan FROM cards;
++----+------------------+
+| id | pan              |
++----+------------------+
+|  1 | 4111111111111111 |
+|  2 | 4111111111111111 |
++----+------------------+
+```
+
+The built-in `AES_ENCRYPT` stores one distinct ciphertext for those same two
+rows, because `block_encryption_mode` defaults to `aes-128-ecb` and ECB gives
+identical input identical output, which exposes which rows are equal.
+
+Two limits to plan for. `encrypt` cannot compute a generated column, because a
+generated column must be deterministic and a fresh IV per call is not
+(`ERROR 3763`); encrypt in the `INSERT` or `UPDATE` instead. And CBC provides no
+integrity check, so store an `hmac` alongside the ciphertext if tampering is
+part of your threat model.
+
+### Generate an identifier that cannot be guessed
+
+`gen_random_uuid()` returns a version 4 UUID and `gen_random_bytes(n)` returns
+up to 1024 raw random bytes, both from OpenSSL's `RAND_bytes`:
+
+```sql
+SELECT gen_random_uuid();
++--------------------------------------+
+| gen_random_uuid()                    |
++--------------------------------------+
+| 758e918c-4096-4b55-b192-150e3fa9d8ea |
++--------------------------------------+
+```
+
+Prefer these over MySQL's `UUID()` for anything a user should not be able to
+guess. `UUID()` returns a version 1 value built from the clock and the server's
+network address, so consecutive calls differ only in the leading field.
+
 ## Installation
 
 If you installed VillageSQL with the install script, the Docker image, or a
