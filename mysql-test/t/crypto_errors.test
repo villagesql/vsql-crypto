@@ -144,5 +144,11 @@ SELECT crypt('password', '$pbkdf2-sha256$10000') IS NULL;
 --echo # Test crypt with invalid algorithm in salt
 SELECT crypt('password', '$invalid-algo$10000$abc') IS NULL;
 
+--echo # Test crypt with non-numeric rounds in salt
+SELECT crypt('password', '$pbkdf2-sha256$notanumber$abc') IS NULL;
+
+--echo # Test crypt with a salt segment that is not valid base64
+SELECT crypt('password', '$pbkdf2-sha256$1000$not!!valid==base64') IS NULL;
+
 # Cleanup
 UNINSTALL EXTENSION vsql_crypto;

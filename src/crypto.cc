@@ -127,18 +127,40 @@ static int base64_decode(const std::string& encoded, unsigned char* decoded, siz
     return decoded_len;
 }
 
+// Building the message allocates, so a second failure falls back to a fixed
+// string - result.warning() on a literal cannot throw.
+static void report_exception(const std::exception &e, StringResult result) {
+  try {
+    result.warning(std::string("Internal error: ") + e.what());
+  } catch (...) {
+    result.warning("Internal error");
+  }
+}
+
 // =============================================================================
 // VDF Implementations
 // =============================================================================
 
-// crypto_version() - Returns OpenSSL version
-void crypto_version_impl(StringResult result) {
+void crypto_version_body(StringResult result) {
   const char *version_str = OpenSSL_version(OPENSSL_VERSION);
   result.set(version_str);
 }
 
-// digest(data, type) - Compute hash of data
-void digest_impl(StringArg data_arg, StringArg type_arg, StringResult result) {
+// crypto_version() - Returns OpenSSL version
+//
+// The SDK does not catch exceptions around a registered entry point, so an
+// escaping throw kills mysqld. Every *_impl below is the same thin wrapper.
+void crypto_version_impl(StringResult result) {
+  try {
+    crypto_version_body(result);
+  } catch (const std::exception &e) {
+    report_exception(e, result);
+  } catch (...) {
+    result.warning("Internal error");
+  }
+}
+
+void digest_body(StringArg data_arg, StringArg type_arg, StringResult result) {
   if (data_arg.is_null() || type_arg.is_null()) {
     result.set_null();
     return;
@@ -173,8 +195,18 @@ void digest_impl(StringArg data_arg, StringArg type_arg, StringResult result) {
   result.set_length(digest_len);
 }
 
-// hmac(data, key, type) - Compute HMAC
-void hmac_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
+// digest(data, type) - Compute hash of data
+void digest_impl(StringArg data_arg, StringArg type_arg, StringResult result) {
+  try {
+    digest_body(data_arg, type_arg, result);
+  } catch (const std::exception &e) {
+    report_exception(e, result);
+  } catch (...) {
+    result.warning("Internal error");
+  }
+}
+
+void hmac_body(StringArg data_arg, StringArg key_arg, StringArg type_arg,
                StringResult result) {
   if (data_arg.is_null() || key_arg.is_null() || type_arg.is_null()) {
     result.set_null();
@@ -203,8 +235,19 @@ void hmac_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
   result.set_length(hmac_len);
 }
 
-// gen_random_bytes(count) - Generate random bytes
-void gen_random_bytes_impl(IntArg count_arg, StringResult result) {
+// hmac(data, key, type) - Compute HMAC
+void hmac_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
+               StringResult result) {
+  try {
+    hmac_body(data_arg, key_arg, type_arg, result);
+  } catch (const std::exception &e) {
+    report_exception(e, result);
+  } catch (...) {
+    result.warning("Internal error");
+  }
+}
+
+void gen_random_bytes_body(IntArg count_arg, StringResult result) {
   if (count_arg.is_null()) {
     result.set_null();
     return;
@@ -227,8 +270,18 @@ void gen_random_bytes_impl(IntArg count_arg, StringResult result) {
   result.set_length(static_cast<size_t>(count));
 }
 
-// gen_random_uuid() - Generate random UUID (version 4)
-void gen_random_uuid_impl(StringResult result) {
+// gen_random_bytes(count) - Generate random bytes
+void gen_random_bytes_impl(IntArg count_arg, StringResult result) {
+  try {
+    gen_random_bytes_body(count_arg, result);
+  } catch (const std::exception &e) {
+    report_exception(e, result);
+  } catch (...) {
+    result.warning("Internal error");
+  }
+}
+
+void gen_random_uuid_body(StringResult result) {
   unsigned char uuid_bytes[16];
 
   if (RAND_bytes(uuid_bytes, 16) != 1) {
@@ -259,8 +312,18 @@ void gen_random_uuid_impl(StringResult result) {
   result.set_length(36);
 }
 
-// encrypt(data, key, type) - Encrypt data with various ciphers
-void encrypt_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
+// gen_random_uuid() - Generate random UUID (version 4)
+void gen_random_uuid_impl(StringResult result) {
+  try {
+    gen_random_uuid_body(result);
+  } catch (const std::exception &e) {
+    report_exception(e, result);
+  } catch (...) {
+    result.warning("Internal error");
+  }
+}
+
+void encrypt_body(StringArg data_arg, StringArg key_arg, StringArg type_arg,
                   StringResult result) {
   if (data_arg.is_null() || key_arg.is_null() || type_arg.is_null()) {
     result.set_null();
@@ -357,8 +420,19 @@ void encrypt_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
   result.set_length(static_cast<size_t>(iv_len + out_len + final_len));
 }
 
-// decrypt(data, key, type) - Decrypt data
-void decrypt_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
+// encrypt(data, key, type) - Encrypt data with various ciphers
+void encrypt_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
+                  StringResult result) {
+  try {
+    encrypt_body(data_arg, key_arg, type_arg, result);
+  } catch (const std::exception &e) {
+    report_exception(e, result);
+  } catch (...) {
+    result.warning("Internal error");
+  }
+}
+
+void decrypt_body(StringArg data_arg, StringArg key_arg, StringArg type_arg,
                   StringResult result) {
   if (data_arg.is_null() || key_arg.is_null() || type_arg.is_null()) {
     result.set_null();
@@ -411,7 +485,7 @@ void decrypt_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
   auto *out_ptr = reinterpret_cast<unsigned char *>(buf.data());
   int out_len = 0, final_len = 0;
 
-  // Guard the fixed result buffer against overflow (see encrypt_impl):
+  // Guard the fixed result buffer against overflow (see encrypt_body):
   // plaintext output can reach encrypted_len + one cipher block.
   {
     size_t need =
@@ -451,8 +525,19 @@ void decrypt_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
   result.set_length(static_cast<size_t>(out_len + final_len));
 }
 
-// gen_salt(type, iter_count) - Generate salt for password hashing
-void gen_salt_impl(StringArg type_arg, IntArg iter_arg, StringResult result) {
+// decrypt(data, key, type) - Decrypt data
+void decrypt_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
+                  StringResult result) {
+  try {
+    decrypt_body(data_arg, key_arg, type_arg, result);
+  } catch (const std::exception &e) {
+    report_exception(e, result);
+  } catch (...) {
+    result.warning("Internal error");
+  }
+}
+
+void gen_salt_body(StringArg type_arg, IntArg iter_arg, StringResult result) {
   if (type_arg.is_null()) {
     result.set_null();
     return;
@@ -494,8 +579,18 @@ void gen_salt_impl(StringArg type_arg, IntArg iter_arg, StringResult result) {
   result.set(output);
 }
 
-// crypt(password, salt) - Hash password using PBKDF2
-void crypt_impl(StringArg password_arg, StringArg salt_arg,
+// gen_salt(type, iter_count) - Generate salt for password hashing
+void gen_salt_impl(StringArg type_arg, IntArg iter_arg, StringResult result) {
+  try {
+    gen_salt_body(type_arg, iter_arg, result);
+  } catch (const std::exception &e) {
+    report_exception(e, result);
+  } catch (...) {
+    result.warning("Internal error");
+  }
+}
+
+void crypt_body(StringArg password_arg, StringArg salt_arg,
                 StringResult result) {
   if (password_arg.is_null() || salt_arg.is_null()) {
     result.set_null();
@@ -581,6 +676,18 @@ void crypt_impl(StringArg password_arg, StringArg salt_arg,
                        salt_b64 + "$" + hash_b64;
 
   result.set(output);
+}
+
+// crypt(password, salt) - Hash password using PBKDF2
+void crypt_impl(StringArg password_arg, StringArg salt_arg,
+                StringResult result) {
+  try {
+    crypt_body(password_arg, salt_arg, result);
+  } catch (const std::exception &e) {
+    report_exception(e, result);
+  } catch (...) {
+    result.warning("Internal error");
+  }
 }
 
 // =============================================================================
