@@ -13,15 +13,157 @@ A comprehensive cryptographic extension for VillageSQL Server providing secure h
 - **Cryptographic RNG**: Secure random byte generation and UUID v4 generation using OpenSSL
 - **High Performance**: Optimized C++ implementation with OpenSSL backend
 
+## Quick start
+
+Four examples, end to end: storing a password, signing and verifying a payload,
+encrypting a column, and generating an identifier that cannot be guessed.
+[Available Functions](#available-functions) is the per-function reference for
+everything they use.
+
+Prerequisites: the extension installed, which on any packaged VillageSQL is one
+statement. If you installed with the install script, the Docker image, or a
+release tarball, `vsql_crypto.veb` is already in the server's `veb_dir`
+directory (`SHOW VARIABLES LIKE 'veb_dir'` shows where that is). vsql-crypto
+declares no preview capabilities, so no server flag and no restart are needed.
+On a bare source build, build the VEB and copy it into `veb_dir` first (see
+[Installation](#installation)).
+
+```sql
+INSTALL EXTENSION vsql_crypto;
+SELECT crypto_version();
+```
+
+### Store a password
+
+`gen_salt` produces a random salt and records the iteration count with it, and
+`crypt` runs the password through PBKDF2. Verification recomputes the hash using
+the stored value as the salt, so checking a login is one comparison:
+
+```sql
+CREATE TABLE users (email VARCHAR(255) PRIMARY KEY, pw_hash VARCHAR(255) NOT NULL);
+
+INSERT INTO users
+  VALUES ('dana@myco.example',
+          crypt('correct horse battery', gen_salt('pbkdf2-sha256', 100000)));
+
+SELECT crypt('correct horse battery', pw_hash) = pw_hash AS login_ok
+  FROM users WHERE email = 'dana@myco.example';
++----------+
+| login_ok |
++----------+
+|        1 |
++----------+
+```
+
+The stored string carries the algorithm and the iteration count in front of the
+salt and the hash, so raising the count for new passwords leaves existing rows
+verifying at the count they were written with:
+
+```
+$pbkdf2-sha256$100000$wxu24gc1Lg24l6WO0sQFYQ$j2DMnv+jgqZxTp+GMbhp+m/PeuO2T0iUNQKj9p99lzw
+```
+
+`gen_salt` supports the PBKDF2 family only (`pbkdf2-sha256` and
+`pbkdf2-sha512`, plus the aliases in [Password Hashing Functions](#password-hashing-functions)).
+pgcrypto's `bf`, `md5`, and `des` return NULL, so bcrypt hashes from PostgreSQL
+do not carry over; re-hash each user at their next successful login.
+
+### Sign and verify a payload
+
+`hmac` signs a payload with a shared secret. The receiver recomputes the
+signature over the bytes it received and compares, which proves both that the
+sender holds the secret and that the payload arrived unaltered:
+
+```sql
+SET @payload = '{"order":4711,"total":"29.99"}';
+SET @secret  = 'shared-secret';
+SET @sig     = HEX(hmac(@payload, @secret, 'sha256'));
+
+SELECT @sig = HEX(hmac(@payload, @secret, 'sha256')) AS signature_ok,
+       @sig = HEX(hmac('{"order":4711,"total":"29.98"}', @secret, 'sha256')) AS tampered_ok;
++--------------+-------------+
+| signature_ok | tampered_ok |
++--------------+-------------+
+|            1 |           0 |
++--------------+-------------+
+```
+
+`hmac` returns raw bytes; `HEX()` puts them in the form a header carries. For a
+hash with no secret involved, use `digest`.
+
+### Encrypt a column
+
+`encrypt` draws a fresh random IV per call and writes it into the front of the
+ciphertext, so two rows holding the same value do not match each other, and
+`decrypt` needs only the stored bytes, the key, and the cipher name. Ciphertext
+is binary, so the column is `VARBINARY` or `BLOB`:
+
+```sql
+CREATE TABLE cards (id INT PRIMARY KEY, pan VARBINARY(255) NOT NULL);
+
+INSERT INTO cards VALUES
+  (1, encrypt('4111111111111111', 'my-secret-key-16', 'aes')),
+  (2, encrypt('4111111111111111', 'my-secret-key-16', 'aes'));
+
+SELECT COUNT(DISTINCT pan) AS distinct_ciphertexts FROM cards;
++----------------------+
+| distinct_ciphertexts |
++----------------------+
+|                    2 |
++----------------------+
+
+SELECT id, CAST(decrypt(pan, 'my-secret-key-16', 'aes') AS CHAR) AS pan FROM cards;
++----+------------------+
+| id | pan              |
++----+------------------+
+|  1 | 4111111111111111 |
+|  2 | 4111111111111111 |
++----+------------------+
+```
+
+The built-in `AES_ENCRYPT` stores one distinct ciphertext for those same two
+rows, because `block_encryption_mode` defaults to `aes-128-ecb` and ECB gives
+identical input identical output, which exposes which rows are equal.
+
+Two limits to plan for. `encrypt` cannot compute a generated column, because a
+generated column must be deterministic and a fresh IV per call is not
+(`ERROR 3763`); encrypt in the `INSERT` or `UPDATE` instead. And CBC provides no
+integrity check, so store an `hmac` alongside the ciphertext if tampering is
+part of your threat model.
+
+### Generate an identifier that cannot be guessed
+
+`gen_random_uuid()` returns a version 4 UUID and `gen_random_bytes(n)` returns
+up to 1024 raw random bytes, both from OpenSSL's `RAND_bytes`:
+
+```sql
+SELECT gen_random_uuid();
++--------------------------------------+
+| gen_random_uuid()                    |
++--------------------------------------+
+| 758e918c-4096-4b55-b192-150e3fa9d8ea |
++--------------------------------------+
+```
+
+Prefer these over MySQL's `UUID()` for anything a user should not be able to
+guess. `UUID()` returns a version 1 value built from the clock and the server's
+network address, so consecutive calls differ only in the leading field.
+
 ## Installation
 
-### Option 1: Install Pre-built VEB Package
-1. Download the `vsql_crypto.veb` package from releases
-2. Install the VEB package to your VillageSQL instance
+If you installed VillageSQL with the install script, the Docker image, or a
+release tarball, `vsql_crypto.veb` is already in the server's `lib/veb/`
+directory. There is nothing to download — just install it:
 
-### Option 2: Build from Source
+```sql
+INSTALL EXTENSION vsql_crypto;
+```
 
-#### Prerequisites
+If you built the server from source yourself, `lib/veb/` will not have it unless
+you built the bundled extensions as well. Build from source in that case, or to
+work on the extension itself.
+
+### Prerequisites
 - VillageSQL build directory (specified via `VillageSQL_BUILD_DIR`)
 - CMake 3.16 or higher
 - C++17 compatible compiler
@@ -29,7 +171,7 @@ A comprehensive cryptographic extension for VillageSQL Server providing secure h
 
 📚 **Full Documentation**: Visit [villagesql.com/docs](https://villagesql.com/docs) for comprehensive guides on building extensions, architecture details, and more.
 
-#### Build Instructions
+### Build Instructions
 
 1. Clone the repository (if not already done):
    ```bash
@@ -50,7 +192,7 @@ A comprehensive cryptographic extension for VillageSQL Server providing secure h
    ```bash
    mkdir build
    cd build
-   cmake .. -DVillageSQL_BUILD_DIR=~/build/villagesql
+   cmake .. -DVillageSQL_BUILD_DIR="$HOME/build/villagesql"
    ```
 
    **Note**:
@@ -58,7 +200,7 @@ A comprehensive cryptographic extension for VillageSQL Server providing secure h
 
 3. Build the extension:
    ```bash
-   make -j $(($(getconf _NPROCESSORS_ONLN) - 2))
+   make -j $(getconf _NPROCESSORS_ONLN)
    ```
 
    This creates the `vsql_crypto.veb` package in the build directory.
@@ -68,7 +210,7 @@ A comprehensive cryptographic extension for VillageSQL Server providing secure h
    make install
    ```
 
-   This copies the VEB to the directory specified by `VEB_INSTALL_DIR`. If not using `make install`, you can manually copy the VEB file to your desired location.
+   This copies the VEB to the directory specified by `VillageSQL_VEB_INSTALL_DIR`. If not using `make install`, you can manually copy the VEB file to your desired location.
 
 The VEB (VillageSQL Extension Bundle) contains:
 - `manifest.json` - Extension metadata
@@ -123,7 +265,7 @@ SELECT HEX(hmac('data', 'password', 'sha1'));
 
 ```sql
 -- Supported ciphers: aes (aes-128, aes-192, aes-256)
-SET @encrypted = encrypt('sensitive data', 'my-secret-key', 'aes-256');
+SET @encrypted = encrypt('sensitive data', 'thirty-two-byte-key-for-aes-256!', 'aes-256');
 SET @encrypted = encrypt('text', 'sixteen-byte-key', 'aes');
 ```
 
@@ -184,8 +326,8 @@ SET @salt = gen_salt('pbkdf2-sha256', 100000);
 SET @salt512 = gen_salt('pbkdf2-sha512', 50000);
 
 -- Short type aliases are also supported
-SET @salt = gen_salt('sha256', 10000);  -- Same as pbkdf2-sha256
-SET @salt = gen_salt('sha512', 10000);  -- Same as pbkdf2-sha512
+SET @salt = gen_salt('sha256', 100000);  -- Same as pbkdf2-sha256
+SET @salt = gen_salt('sha512', 100000);  -- Same as pbkdf2-sha512
 ```
 
 Supported algorithms:
@@ -198,12 +340,12 @@ Recommended iteration count: 100,000 or higher (per OWASP guidelines)
 
 ```sql
 -- Hash a password
-SET @salt = gen_salt('pbkdf2-sha256', 10000);
-SET @hash = crypt('mypassword', @salt);
-
--- Verify a password by comparing hashes
+SET @salt = gen_salt('pbkdf2-sha256', 100000);
 SET @stored_hash = crypt('mypassword', @salt);
-SELECT @hash = @stored_hash;  -- Returns 1 if password matches
+
+-- Verify a password: pass the stored hash back in as the salt
+SELECT crypt('mypassword', @stored_hash) = @stored_hash;     -- Returns 1
+SELECT crypt('wrongpassword', @stored_hash) = @stored_hash;  -- Returns 0
 ```
 
 The `crypt()` function returns a formatted hash string that includes the algorithm, iteration count, salt, and hash:
@@ -302,7 +444,7 @@ VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
   perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test --record
 ```
 
-**Note on Error Handling**: Functions return NULL for invalid inputs (e.g., unsupported algorithms, NULL arguments) rather than throwing SQL errors. The error tests verify this behavior.
+**Note on Error Handling**: `digest()`, `hmac()`, `gen_salt()` and `crypt()` return NULL for an unsupported algorithm name or a NULL argument rather than throwing. `encrypt()` and `decrypt()` do raise a SQL error (ERROR 3200) for structurally invalid input such as a key shorter than the cipher requires, and calling a function with the wrong number of arguments raises ERROR 3219.
 
 ## Notes on MySQL Built-in Functions
 
@@ -347,7 +489,7 @@ vsql-crypto/
 
 ### Build Targets
 - `make` - Build the extension and create the `vsql_crypto.veb` package
-- `make install` - Install the VEB to the directory specified by `VEB_INSTALL_DIR`
+- `make install` - Install the VEB to the directory specified by `VillageSQL_VEB_INSTALL_DIR`
 
 ### Implementation Details
 
@@ -387,14 +529,14 @@ VillageSQL welcomes contributions from the community. Please ensure all tests pa
    ```bash
    mkdir build && cd build
    cmake .. -DVillageSQL_BUILD_DIR=$HOME/build/villagesql
-   make -j $(($(getconf _NPROCESSORS_ONLN) - 2))
+   make -j $(getconf _NPROCESSORS_ONLN)
    ```
 
    **macOS:**
    ```bash
    mkdir build && cd build
-   cmake .. -DVillageSQL_BUILD_DIR=~/build/villagesql
-   make -j $(($(getconf _NPROCESSORS_ONLN) - 2))
+   cmake .. -DVillageSQL_BUILD_DIR="$HOME/build/villagesql"
+   make -j $(getconf _NPROCESSORS_ONLN)
    ```
 
 2. Run the test suite:
