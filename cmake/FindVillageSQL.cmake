@@ -257,8 +257,9 @@ if(VillageSQL_FOUND)
   # VillageSQL_BUILD_DIR or a newer staged SDK). Discard a cached location
   # that is not inside the selected SDK so the headers and config match.
   if(VillageSQLExtensionFramework_DIR)
-    file(REAL_PATH "${VillageSQL_PREFIX}" _vsql_prefix_real)
-    file(REAL_PATH "${VillageSQLExtensionFramework_DIR}" _vef_dir_real)
+    get_filename_component(_vsql_prefix_real "${VillageSQL_PREFIX}" REALPATH)
+    get_filename_component(_vef_dir_real
+      "${VillageSQLExtensionFramework_DIR}" REALPATH)
     string(FIND "${_vef_dir_real}/" "${_vsql_prefix_real}/" _vef_dir_pos)
     if(NOT _vef_dir_pos EQUAL 0)
       message(STATUS
