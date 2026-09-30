@@ -252,6 +252,26 @@ if(VillageSQL_FOUND)
     )
   endif()
 
+  # find_package() caches VillageSQLExtensionFramework_DIR and reuses it on
+  # later runs, even if the SDK selected above has changed (e.g. a new
+  # VillageSQL_BUILD_DIR or a newer staged SDK). Discard a cached location
+  # that is not inside the selected SDK so the headers and config match.
+  if(VillageSQLExtensionFramework_DIR)
+    file(REAL_PATH "${VillageSQL_PREFIX}" _vsql_prefix_real)
+    file(REAL_PATH "${VillageSQLExtensionFramework_DIR}" _vef_dir_real)
+    string(FIND "${_vef_dir_real}/" "${_vsql_prefix_real}/" _vef_dir_pos)
+    if(NOT _vef_dir_pos EQUAL 0)
+      message(STATUS
+        "Discarding stale cached VillageSQLExtensionFramework_DIR: "
+        "${VillageSQLExtensionFramework_DIR}"
+      )
+      unset(VillageSQLExtensionFramework_DIR CACHE)
+    endif()
+    unset(_vsql_prefix_real)
+    unset(_vef_dir_real)
+    unset(_vef_dir_pos)
+  endif()
+
   # Chain to the full CMake config for VEF_CREATE_VEB, etc.
   find_package(VillageSQLExtensionFramework REQUIRED
     PATHS "${VillageSQL_PREFIX}"
