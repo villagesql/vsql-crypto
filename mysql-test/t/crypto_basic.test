@@ -55,6 +55,9 @@ SET @key_aes = 'sixteen-byte-key';
 SET @enc_aes = encrypt(@binary, @key_aes, 'aes');
 SELECT HEX(decrypt(@enc_aes, @key_aes, 'aes'));
 
+# The bytes are hashed as given, whatever charset they are labelled with
+SELECT HEX(digest(_latin1 0xE9, 'sha256')) = HEX(digest(UNHEX('E9'), 'sha256')) AS same_bytes;
+
 # Test AES-128 explicitly
 SET @data128 = 'AES-128 test data';
 SET @key128 = 'sixteen-byte-key';
