@@ -129,7 +129,8 @@ static int base64_decode(const std::string& encoded, unsigned char* decoded, siz
 
 // Building the message allocates, so a second failure falls back to a fixed
 // string - result.warning() on a literal cannot throw.
-static void report_exception(const std::exception &e, StringResult result) {
+template <typename Result>
+static void report_exception(const std::exception &e, Result result) {
   try {
     result.warning(std::string("Internal error: ") + e.what());
   } catch (...) {
@@ -160,7 +161,7 @@ void crypto_version_impl(StringResult result) {
   }
 }
 
-void digest_body(StringArg data_arg, StringArg type_arg, StringResult result) {
+void digest_body(BinaryArg data_arg, StringArg type_arg, BinaryResult result) {
   if (data_arg.is_null() || type_arg.is_null()) {
     result.set_null();
     return;
@@ -196,7 +197,7 @@ void digest_body(StringArg data_arg, StringArg type_arg, StringResult result) {
 }
 
 // digest(data, type) - Compute hash of data
-void digest_impl(StringArg data_arg, StringArg type_arg, StringResult result) {
+void digest_impl(BinaryArg data_arg, StringArg type_arg, BinaryResult result) {
   try {
     digest_body(data_arg, type_arg, result);
   } catch (const std::exception &e) {
@@ -206,8 +207,8 @@ void digest_impl(StringArg data_arg, StringArg type_arg, StringResult result) {
   }
 }
 
-void hmac_body(StringArg data_arg, StringArg key_arg, StringArg type_arg,
-               StringResult result) {
+void hmac_body(BinaryArg data_arg, BinaryArg key_arg, StringArg type_arg,
+               BinaryResult result) {
   if (data_arg.is_null() || key_arg.is_null() || type_arg.is_null()) {
     result.set_null();
     return;
@@ -236,8 +237,8 @@ void hmac_body(StringArg data_arg, StringArg key_arg, StringArg type_arg,
 }
 
 // hmac(data, key, type) - Compute HMAC
-void hmac_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
-               StringResult result) {
+void hmac_impl(BinaryArg data_arg, BinaryArg key_arg, StringArg type_arg,
+               BinaryResult result) {
   try {
     hmac_body(data_arg, key_arg, type_arg, result);
   } catch (const std::exception &e) {
@@ -247,7 +248,7 @@ void hmac_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
   }
 }
 
-void gen_random_bytes_body(IntArg count_arg, StringResult result) {
+void gen_random_bytes_body(IntArg count_arg, BinaryResult result) {
   if (count_arg.is_null()) {
     result.set_null();
     return;
@@ -271,7 +272,7 @@ void gen_random_bytes_body(IntArg count_arg, StringResult result) {
 }
 
 // gen_random_bytes(count) - Generate random bytes
-void gen_random_bytes_impl(IntArg count_arg, StringResult result) {
+void gen_random_bytes_impl(IntArg count_arg, BinaryResult result) {
   try {
     gen_random_bytes_body(count_arg, result);
   } catch (const std::exception &e) {
@@ -323,8 +324,8 @@ void gen_random_uuid_impl(StringResult result) {
   }
 }
 
-void encrypt_body(StringArg data_arg, StringArg key_arg, StringArg type_arg,
-                  StringResult result) {
+void encrypt_body(BinaryArg data_arg, BinaryArg key_arg, StringArg type_arg,
+                  BinaryResult result) {
   if (data_arg.is_null() || key_arg.is_null() || type_arg.is_null()) {
     result.set_null();
     return;
@@ -421,8 +422,8 @@ void encrypt_body(StringArg data_arg, StringArg key_arg, StringArg type_arg,
 }
 
 // encrypt(data, key, type) - Encrypt data with various ciphers
-void encrypt_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
-                  StringResult result) {
+void encrypt_impl(BinaryArg data_arg, BinaryArg key_arg, StringArg type_arg,
+                  BinaryResult result) {
   try {
     encrypt_body(data_arg, key_arg, type_arg, result);
   } catch (const std::exception &e) {
@@ -432,8 +433,8 @@ void encrypt_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
   }
 }
 
-void decrypt_body(StringArg data_arg, StringArg key_arg, StringArg type_arg,
-                  StringResult result) {
+void decrypt_body(BinaryArg data_arg, BinaryArg key_arg, StringArg type_arg,
+                  BinaryResult result) {
   if (data_arg.is_null() || key_arg.is_null() || type_arg.is_null()) {
     result.set_null();
     return;
@@ -526,8 +527,8 @@ void decrypt_body(StringArg data_arg, StringArg key_arg, StringArg type_arg,
 }
 
 // decrypt(data, key, type) - Decrypt data
-void decrypt_impl(StringArg data_arg, StringArg key_arg, StringArg type_arg,
-                  StringResult result) {
+void decrypt_impl(BinaryArg data_arg, BinaryArg key_arg, StringArg type_arg,
+                  BinaryResult result) {
   try {
     decrypt_body(data_arg, key_arg, type_arg, result);
   } catch (const std::exception &e) {
@@ -706,17 +707,19 @@ VEF_GENERATE_ENTRY_POINTS(
 
         // Hash functions
         .func(make_func<&digest_impl>("digest")
-                  .returns(STRING)
-                  .param(STRING)
+                  .returns(BINARY)
+                  .max_result_length(64)
+                  .param(BINARY)
                   .param(STRING)
                   .buffer_size(64)
                   .deterministic()
                   .build())
 
         .func(make_func<&hmac_impl>("hmac")
-                  .returns(STRING)
-                  .param(STRING)
-                  .param(STRING)
+                  .returns(BINARY)
+                  .max_result_length(64)
+                  .param(BINARY)
+                  .param(BINARY)
                   .param(STRING)
                   .buffer_size(64)
                   .deterministic()
@@ -724,7 +727,8 @@ VEF_GENERATE_ENTRY_POINTS(
 
         // Random data generation
         .func(make_func<&gen_random_bytes_impl>("gen_random_bytes")
-                  .returns(STRING)
+                  .returns(BINARY)
+                  .max_result_length(1024)
                   .param(INT)
                   .buffer_size(1024)
                   .build())
@@ -737,17 +741,19 @@ VEF_GENERATE_ENTRY_POINTS(
 
         // Encryption/Decryption
         .func(make_func<&encrypt_impl>("encrypt")
-                  .returns(STRING)
-                  .param(STRING)
-                  .param(STRING)
+                  .returns(BINARY)
+                  .max_result_length(65535)
+                  .param(BINARY)
+                  .param(BINARY)
                   .param(STRING)
                   .buffer_size(65535)
                   .build())
 
         .func(make_func<&decrypt_impl>("decrypt")
-                  .returns(STRING)
-                  .param(STRING)
-                  .param(STRING)
+                  .returns(BINARY)
+                  .max_result_length(65535)
+                  .param(BINARY)
+                  .param(BINARY)
                   .param(STRING)
                   .buffer_size(65535)
                   .deterministic()

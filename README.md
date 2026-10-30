@@ -112,7 +112,7 @@ SELECT COUNT(DISTINCT pan) AS distinct_ciphertexts FROM cards;
 |                    2 |
 +----------------------+
 
-SELECT id, CAST(decrypt(pan, 'my-secret-key-16', 'aes') AS CHAR) AS pan FROM cards;
+SELECT id, CONVERT(decrypt(pan, 'my-secret-key-16', 'aes') USING utf8mb4) AS pan FROM cards;
 +----+------------------+
 | id | pan              |
 +----+------------------+
@@ -275,7 +275,7 @@ SET @encrypted = encrypt('text', 'sixteen-byte-key', 'aes');
 SET @plaintext = 'Hello, World!';
 SET @key = 'my-16-byte-key!!';
 SET @encrypted = encrypt(@plaintext, @key, 'aes');
-SELECT decrypt(@encrypted, @key, 'aes');
+SELECT CONVERT(decrypt(@encrypted, @key, 'aes') USING utf8mb4);
 -- Returns: Hello, World!
 ```
 
