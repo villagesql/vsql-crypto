@@ -65,6 +65,9 @@ SET @enc_aes = encrypt(@binary, @key_aes, 'aes');
 SELECT HEX(decrypt(@enc_aes, @key_aes, 'aes'));
 HEX(decrypt(@enc_aes, @key_aes, 'aes'))
 DEADBEEF
+SELECT HEX(digest(_latin1 0xE9, 'sha256')) = HEX(digest(UNHEX('E9'), 'sha256')) AS same_bytes;
+same_bytes
+1
 SET @data128 = 'AES-128 test data';
 SET @key128 = 'sixteen-byte-key';
 SET @enc128 = encrypt(@data128, @key128, 'aes-128');

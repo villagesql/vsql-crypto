@@ -112,7 +112,7 @@ SELECT COUNT(DISTINCT pan) AS distinct_ciphertexts FROM cards;
 |                    2 |
 +----------------------+
 
-SELECT id, CAST(decrypt(pan, 'my-secret-key-16', 'aes') AS CHAR) AS pan FROM cards;
+SELECT id, CONVERT(decrypt(pan, 'my-secret-key-16', 'aes') USING utf8mb4) AS pan FROM cards;
 +----+------------------+
 | id | pan              |
 +----+------------------+
@@ -271,11 +271,16 @@ SET @encrypted = encrypt('text', 'sixteen-byte-key', 'aes');
 
 **decrypt(data, key, type)** - Decrypt encrypted data
 
+`decrypt` returns the plaintext as bytes in the binary character set, since it
+cannot know whether they were text. To read it as text, convert it with
+`CONVERT(... USING utf8mb4)`. Before 0.0.8 it returned the bytes labelled as
+utf8mb4.
+
 ```sql
 SET @plaintext = 'Hello, World!';
 SET @key = 'my-16-byte-key!!';
 SET @encrypted = encrypt(@plaintext, @key, 'aes');
-SELECT decrypt(@encrypted, @key, 'aes');
+SELECT CONVERT(decrypt(@encrypted, @key, 'aes') USING utf8mb4);
 -- Returns: Hello, World!
 ```
 

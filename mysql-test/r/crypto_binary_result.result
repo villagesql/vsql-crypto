@@ -1,0 +1,39 @@
+INSTALL EXTENSION vsql_crypto;
+SELECT CHARSET(digest('abc', 'sha256')) AS digest,
+CHARSET(hmac('abc', 'key', 'sha256')) AS hmac,
+CHARSET(encrypt('abc', 'sixteen-byte-key', 'aes')) AS encrypt,
+CHARSET(decrypt(encrypt('abc', 'sixteen-byte-key', 'aes'),
+'sixteen-byte-key', 'aes')) AS decrypt,
+CHARSET(gen_random_bytes(4)) AS gen_random_bytes;
+digest	hmac	encrypt	decrypt	gen_random_bytes
+binary	binary	binary	binary	binary
+CREATE TABLE d AS SELECT digest('abc', 'sha256') AS h;
+SHOW CREATE TABLE d;
+Table	Create Table
+d	CREATE TABLE `d` (
+  `h` varbinary(64) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT HEX(h) FROM d;
+HEX(h)
+BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD
+DROP TABLE d;
+CREATE TABLE t AS
+SELECT hmac('abc', 'key', 'sha256') AS m,
+encrypt('abc', 'sixteen-byte-key', 'aes') AS e,
+gen_random_bytes(16) AS r;
+SHOW CREATE TABLE t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `m` varbinary(64) DEFAULT NULL,
+  `e` blob,
+  `r` blob
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT HEX(m), LENGTH(e), LENGTH(r) FROM t;
+HEX(m)	LENGTH(e)	LENGTH(r)
+9C196E32DC0175F86F4B1CB89289D6619DE6BEE699E4C378E68309ED97A1A6AB	32	16
+SELECT CONVERT(decrypt(e, 'sixteen-byte-key', 'aes') USING utf8mb4) AS plain
+FROM t;
+plain
+abc
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_crypto;

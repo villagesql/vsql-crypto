@@ -1,0 +1,37 @@
+# Functions that return bytes return BINARY, so their results can be stored
+# in a column created from them, which a utf8mb4 result that is not valid text
+# cannot.
+
+# Setup: Copy VEB to veb_dir if VSQL_CRYPTO_VEB is set, then install extension
+--let $veb_dest = `SELECT CONCAT(@@veb_dir, '/vsql_crypto.veb')`
+if ($VSQL_CRYPTO_VEB) {
+  --error 0,1
+  --remove_file $veb_dest
+  --copy_file $VSQL_CRYPTO_VEB $veb_dest
+}
+INSTALL EXTENSION vsql_crypto;
+
+SELECT CHARSET(digest('abc', 'sha256')) AS digest,
+       CHARSET(hmac('abc', 'key', 'sha256')) AS hmac,
+       CHARSET(encrypt('abc', 'sixteen-byte-key', 'aes')) AS encrypt,
+       CHARSET(decrypt(encrypt('abc', 'sixteen-byte-key', 'aes'),
+                       'sixteen-byte-key', 'aes')) AS decrypt,
+       CHARSET(gen_random_bytes(4)) AS gen_random_bytes;
+
+CREATE TABLE d AS SELECT digest('abc', 'sha256') AS h;
+SHOW CREATE TABLE d;
+SELECT HEX(h) FROM d;
+DROP TABLE d;
+
+CREATE TABLE t AS
+  SELECT hmac('abc', 'key', 'sha256') AS m,
+         encrypt('abc', 'sixteen-byte-key', 'aes') AS e,
+         gen_random_bytes(16) AS r;
+SHOW CREATE TABLE t;
+SELECT HEX(m), LENGTH(e), LENGTH(r) FROM t;
+SELECT CONVERT(decrypt(e, 'sixteen-byte-key', 'aes') USING utf8mb4) AS plain
+FROM t;
+DROP TABLE t;
+
+# Cleanup
+UNINSTALL EXTENSION vsql_crypto;
