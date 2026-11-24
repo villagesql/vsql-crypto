@@ -8,9 +8,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(EXTENSION_NAME "vsql_crypto")
 
 # Find VillageSQL SDK.
-# BINARY arguments and results need protocol 4, whose headers ship in the
-# SDK's include-dev/ tree until protocol 4 is stable.
-set(VSQL_USE_DEV_ABI ON)
+# Needs VEF_TYPE_BINARY and .max_result_length(), both stable as of SDK
+# v0.0.8 (protocol 5) -- the default include tree, no dev-ABI opt-in needed.
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 find_package(VillageSQL REQUIRED)
 

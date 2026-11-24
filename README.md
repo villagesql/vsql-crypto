@@ -164,7 +164,7 @@ you built the bundled extensions as well. Build from source in that case, or to
 work on the extension itself.
 
 ### Prerequisites
-- VillageSQL build directory (specified via `VillageSQL_BUILD_DIR`)
+- VillageSQL build directory, 0.0.8 or newer (specified via `VillageSQL_BUILD_DIR`)
 - CMake 3.16 or higher
 - C++17 compatible compiler
 - OpenSSL development libraries
@@ -181,18 +181,10 @@ work on the extension itself.
 
 2. Configure CMake with required paths:
 
-   **Linux:**
    ```bash
    mkdir build
    cd build
    cmake .. -DVillageSQL_BUILD_DIR=$HOME/build/villagesql
-   ```
-
-   **macOS:**
-   ```bash
-   mkdir build
-   cd build
-   cmake .. -DVillageSQL_BUILD_DIR="$HOME/build/villagesql"
    ```
 
    **Note**:
@@ -395,18 +387,8 @@ The extension includes comprehensive test files using the MySQL Test Runner (MTR
 
 This method assumes the VEB is already installed to your VillageSQL veb_dir.
 
-**Linux:**
 ```bash
 cd $HOME/build/villagesql/mysql-test
-perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test
-
-# Run individual test
-perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test crypto_basic
-```
-
-**macOS:**
-```bash
-cd ~/build/villagesql/mysql-test
 perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test
 
 # Run individual test
@@ -417,16 +399,8 @@ perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test crypto_basic
 
 Use this to test a specific VEB build without installing it first:
 
-**Linux:**
 ```bash
 cd $HOME/build/villagesql/mysql-test
-VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
-  perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test
-```
-
-**macOS:**
-```bash
-cd ~/build/villagesql/mysql-test
 VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
   perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test
 ```
@@ -435,16 +409,8 @@ VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
 
 To create or update expected test results:
 
-**Linux:**
 ```bash
 cd $HOME/build/villagesql/mysql-test
-VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
-  perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test --record
-```
-
-**macOS:**
-```bash
-cd ~/build/villagesql/mysql-test
 VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
   perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test --record
 ```
@@ -530,32 +496,16 @@ VillageSQL welcomes contributions from the community. Please ensure all tests pa
 
 1. Build the extension:
 
-   **Linux:**
    ```bash
    mkdir build && cd build
    cmake .. -DVillageSQL_BUILD_DIR=$HOME/build/villagesql
    make -j $(getconf _NPROCESSORS_ONLN)
    ```
 
-   **macOS:**
-   ```bash
-   mkdir build && cd build
-   cmake .. -DVillageSQL_BUILD_DIR="$HOME/build/villagesql"
-   make -j $(getconf _NPROCESSORS_ONLN)
-   ```
-
 2. Run the test suite:
 
-   **Linux:**
    ```bash
    cd $HOME/build/villagesql/mysql-test
-   VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
-     perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test
-   ```
-
-   **macOS:**
-   ```bash
-   cd ~/build/villagesql/mysql-test
    VSQL_CRYPTO_VEB=/path/to/vsql-crypto/build/vsql_crypto.veb \
      perl mysql-test-run.pl --suite=/path/to/vsql-crypto/mysql-test
    ```
