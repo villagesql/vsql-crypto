@@ -82,9 +82,9 @@ See `AGENTS.local.md` for machine-specific build paths and configurations.
 - Variable naming: lowercase with underscores (e.g., `digest_len`)
 - All cryptographic operations use OpenSSL APIs (EVP, HMAC, RAND)
 
-## VillageSQL Extension Framework (VEF) API Pattern — Protocol V3
+## VillageSQL Extension Framework (VEF) API Pattern — Protocol V5
 
-This extension uses the Protocol V3 stable SDK (`<villagesql/vsql.h>`).
+This extension uses the Protocol V5 stable SDK (`<villagesql/vsql.h>`), which ships with VillageSQL 0.0.8 and newer.
 
 ### Function Implementation Pattern
 
@@ -99,7 +99,7 @@ void my_function_impl(StringArg arg1, StringArg arg2, StringResult result) {
 }
 ```
 
-Typed argument wrappers: `StringArg`, `IntArg`, `RealArg`. Result wrappers: `StringResult`, `IntResult`, `RealResult`. Use `result.set_null()` for NULL, `result.warning("msg")` for soft errors (Warning 3200 + NULL return), `result.error("msg")` for hard errors (ERROR 3200).
+Typed argument wrappers: `StringArg`, `BinaryArg`, `IntArg`, `RealArg`. Result wrappers: `StringResult`, `BinaryResult`, `IntResult`, `RealResult`. Use `result.set_null()` for NULL, `result.warning("msg")` for soft errors (Warning 3200 + NULL return), `result.error("msg")` for hard errors (ERROR 3200).
 
 ### Function Registration Pattern
 
@@ -111,7 +111,7 @@ VEF_GENERATE_ENTRY_POINTS(
 )
 ```
 
-Extension name and version come from `manifest.json`; `make_extension()` takes no arguments in V3.
+Extension name and version come from `manifest.json`; `make_extension()` takes no arguments in V5.
 
 ## Testing
 
@@ -183,7 +183,7 @@ SELECT HEX(hmac('data', 'key', 'sha256'));
 To add new cryptographic functions to this extension:
 
 1. **Implement the VDF in `src/crypto.cc`**:
-   - Add the implementation function using the Protocol V3 typed wrappers, e.g. `void func_impl(StringArg data, StringResult result)`; match the existing functions in `crypto.cc`
+   - Add the implementation function using the Protocol V5 typed wrappers, e.g. `void func_impl(StringArg data, StringResult result)`; match the existing functions in `crypto.cc`
    - Use OpenSSL APIs for cryptographic operations
    - Check for NULL arguments with `arg.is_null()` and call `result.set_null()` on invalid input; use `result.warning()` for a soft error (warning plus NULL result) and `result.error()` only when continuing is unsafe
    - On success, write the value with `result.set(...)`, or fill `result.buffer()` and call `result.set_length()`
